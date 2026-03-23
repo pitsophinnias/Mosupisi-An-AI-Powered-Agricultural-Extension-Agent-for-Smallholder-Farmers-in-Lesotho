@@ -1,0 +1,749 @@
+// components/PlantingGuide/PlantingGuide.js
+// Mosupisi – AI Agricultural Extension Agent for Lesotho
+
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import {
+  Container,
+  Grid,
+  Paper,
+  Typography,
+  Box,
+  Card,
+  CardContent,
+  CardHeader,
+  Button,
+  Chip,
+  LinearProgress,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  useTheme,
+  Avatar,
+  Alert,
+  Snackbar,
+  CircularProgress,
+} from '@mui/material';
+import {
+  Agriculture as AgricultureIcon,
+  Add as AddIcon,
+  QuestionAnswer as QuestionIcon,
+  Edit as EditIcon,
+  CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  CalendarToday as CalendarIcon,
+  LocalFlorist as PlantIcon,
+  Spa as SeedlingIcon,
+  LightbulbOutlined as AdviceIcon,
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { format, differenceInDays, parseISO, isValid } from 'date-fns';
+import { dbUtils } from '../../db/db';
+import apiConfig from '../../config/api.config'; 
+
+// ── API client ─────────────────────────────────────────────────────────────
+const api = axios.create({
+  //baseURL: 'http://localhost:3001/api',
+  baseURL: apiConfig.plantingGuide, 
+  timeout: 300000,
+});
+
+// ── Crop growth stages (kept client-side for progress bar rendering) ────────
+const cropGrowthStages = {
+  maize: {
+    germination: { days: 7,  description: 'Seed sprouting',       description_st: 'Peo e mela',              icon: '🌱' },
+    vegetative:  { days: 45, description: 'Leaf development',     description_st: 'Makhasi a hola',           icon: '🌿' },
+    tasseling:   { days: 10, description: 'Tassel emergence',     description_st: 'Lithasete li hlaha',       icon: '🌽' },
+    silking:     { days: 10, description: 'Silk emergence',       description_st: 'Silika e hlaha',           icon: '🌽' },
+    dough:       { days: 20, description: 'Kernel development',   description_st: 'Lithollo li hlaha',        icon: '🌽' },
+    dent:        { days: 15, description: 'Kernel denting',       description_st: 'Lithollo li thatafala',    icon: '🌽' },
+    mature:      { days: 10, description: 'Ready for harvest',    description_st: 'E butsoitse',             icon: '🌾' },
+  },
+  sorghum: {
+    germination: { days: 7,  description: 'Seed sprouting',       description_st: 'Peo e mela',              icon: '🌱' },
+    vegetative:  { days: 35, description: 'Leaf development',     description_st: 'Makhasi a hola',           icon: '🌿' },
+    boot:        { days: 10, description: 'Head formation',       description_st: 'Hlooho e hlaha',           icon: '🌾' },
+    heading:     { days: 7,  description: 'Head emergence',       description_st: 'Hlooho e hlaha',           icon: '🌾' },
+    flowering:   { days: 10, description: 'Flowering',            description_st: 'Lipalesa',                 icon: '🌸' },
+    grainFill:   { days: 30, description: 'Grain filling',        description_st: 'Lithollo li tlala',        icon: '🌾' },
+    mature:      { days: 10, description: 'Ready for harvest',    description_st: 'E butsoitse',             icon: '🌾' },
+  },
+  legumes: {
+    germination: { days: 7,  description: 'Seed sprouting',       description_st: 'Peo e mela',              icon: '🌱' },
+    vegetative:  { days: 30, description: 'Leaf and stem growth', description_st: 'Makhasi le kutu li hola', icon: '🌿' },
+    flowering:   { days: 15, description: 'Flower development',   description_st: 'Lipalesa',                 icon: '🌸' },
+    podFill:     { days: 20, description: 'Pod filling',          description_st: 'Likhapetla li tlala',      icon: '🫘' },
+    mature:      { days: 15, description: 'Ready for harvest',    description_st: 'E butsoitse',             icon: '🫘' },
+  },
+};
+
+// ── Crop rotation (kept for offline rendering) ─────────────────────────────
+const cropRotation = {
+  maize:   { next: ['legumes', 'sorghum'], soilPrep: 'Add nitrogen-fixing crops, apply compost, deep plowing',   soilPrep_st: 'Kenya lijalo tsa naetrojene, sebelisa manyolo, lema botebo',   reason: 'Maize depletes nitrogen. Legumes will restore it.' },
+  sorghum: { next: ['legumes', 'maize'],   soilPrep: 'Incorporate crop residue, add organic matter',             soilPrep_st: 'Kenya masalla, eketsa manyolo a tlhaho',                       reason: 'Sorghum leaves residue that improves soil structure.' },
+  legumes: { next: ['maize', 'sorghum'],   soilPrep: 'Minimal tillage, retain nodules for nitrogen',             soilPrep_st: 'Lema hanyane, boloka maqhutsu a naetrojene',                   reason: 'Legumes fix nitrogen, perfect for heavy feeders like maize.' },
+};
+
+// ──────────────────────────────────────────────────────────────────────────
+const PlantingGuide = () => {
+  const { user } = useAuth();
+  const { t, language } = useLanguage();
+  const navigate = useNavigate();
+  const theme = useTheme();
+
+  const [plantings, setPlantings]               = useState([]);
+  const [loading, setLoading]                   = useState(true);
+  const [selectedPlanting, setSelectedPlanting] = useState(null);
+  const [openDialog, setOpenDialog]             = useState(false);
+  const [openActionDialog, setOpenActionDialog] = useState(false);
+  const [openQuestionDialog, setOpenQuestionDialog] = useState(false);
+  const [openAdviceDialog, setOpenAdviceDialog] = useState(false);
+  const [adviceData, setAdviceData]             = useState(null);
+  const [adviceLoading, setAdviceLoading]       = useState(false);
+  const [actionText, setActionText]             = useState('');
+  const [questionText, setQuestionText]         = useState('');
+  const [snackbar, setSnackbar]                 = useState({ open: false, message: '', severity: 'success' });
+  const [newPlanting, setNewPlanting]           = useState({
+    crop: '',
+    plantingDate: format(new Date(), 'yyyy-MM-dd'),
+    area: '',
+    location: '',
+  });
+
+  // ── Load plantings from API (with offline fallback) ──────────────────────
+  const loadPlantings = useCallback(async () => {
+    setLoading(true);
+    if (navigator.onLine) {
+      try {
+        const { data } = await api.get('/plantings');
+        setPlantings(data);
+        // Cache in IndexedDB for offline use
+        await dbUtils.cachePlantings(data);
+      } catch (err) {
+        console.error('API error, falling back to IndexedDB cache:', err);
+        const cached = await dbUtils.getCachedPlantings();
+        setPlantings(cached);
+        showSnackbar(
+          language === 'en'
+            ? 'Offline mode – showing cached data'
+            : 'Mokhoa oa ho se sebetse – data ea pele e bontsoa',
+          'warning',
+        );
+      }
+    } else {
+      // Offline: use Dexie cache
+      const cached = await dbUtils.getCachedPlantings();
+      setPlantings(cached);
+    }
+    setLoading(false);
+  }, [language]);
+
+  useEffect(() => {
+    loadPlantings();
+  }, [loadPlantings]);
+
+  const showSnackbar = (message, severity = 'success') =>
+    setSnackbar({ open: true, message, severity });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const getCropIcon = (crop) => {
+    switch (crop) {
+      case 'maize':   return '🌽';
+      case 'sorghum': return '🌾';
+      case 'legumes': return '🫘';
+      default:        return '🌱';
+    }
+  };
+
+  const calculateGrowthProgress = (planting) => {
+    if (planting.progressPercent !== undefined) return planting.progressPercent;
+    if (planting.status === 'harvested') return 100;
+    try {
+      const plantingDate    = parseISO(planting.plantingDate);
+      const daysSincePlanting = differenceInDays(new Date(), plantingDate);
+      const stages          = cropGrowthStages[planting.crop];
+      if (!stages) return 0;
+      const totalDays = Object.values(stages).reduce((s, st) => s + st.days, 0);
+      return Math.min((daysSincePlanting / totalDays) * 100, 99);
+    } catch { return 0; }
+  };
+
+  const getCurrentStage = (planting) => {
+    if (planting.currentStage) return planting.currentStage;
+    if (planting.status === 'harvested') return 'harvested';
+    try {
+      const daysSincePlanting = differenceInDays(new Date(), parseISO(planting.plantingDate));
+      const stages = cropGrowthStages[planting.crop];
+      if (!stages) return 'unknown';
+      let accumulated = 0;
+      for (const [stage, info] of Object.entries(stages)) {
+        accumulated += info.days;
+        if (daysSincePlanting <= accumulated) return stage;
+      }
+      return 'mature';
+    } catch { return 'unknown'; }
+  };
+
+  const formatDate = (dateString) => {
+    try {
+      if (!dateString) return '';
+      const d = parseISO(dateString);
+      return isValid(d) ? format(d, 'MMM d, yyyy') : '';
+    } catch { return ''; }
+  };
+
+  const formatShortDate = (dateString) => {
+    try {
+      if (!dateString) return '';
+      const d = parseISO(dateString);
+      return isValid(d) ? format(d, 'MMM d') : '';
+    } catch { return ''; }
+  };
+
+  // ── Add planting ──────────────────────────────────────────────────────────
+  const handleAddPlanting = async () => {
+    if (!newPlanting.crop || !newPlanting.plantingDate) return;
+
+    const payload = {
+      ...newPlanting,
+      status:         'growing',
+      growthStage:    'germination',
+      lastAction:     language === 'en' ? 'Planted' : 'E jalwe',
+      lastActionDate: newPlanting.plantingDate,
+      notes:          language === 'en' ? 'New planting' : 'Sejalo se secha',
+    };
+
+    if (navigator.onLine) {
+      try {
+        const { data } = await api.post('/plantings', payload);
+        setPlantings((prev) => [data, ...prev]);
+        await dbUtils.savePlanting(data);
+        showSnackbar(language === 'en' ? 'Planting added!' : 'Sejalo se kentsoe!');
+      } catch (err) {
+        console.error('Create planting error:', err);
+        const local = { ...payload, id: Date.now(), createdAt: new Date().toISOString() };
+        setPlantings((prev) => [local, ...prev]);
+        await dbUtils.savePlanting(local);
+        await dbUtils.addToSyncQueue('CREATE_PLANTING', local);
+        showSnackbar(
+          language === 'en' ? 'Saved offline – will sync when online' : 'E bolokiloe – e tla tsamaisana ha o khutla',
+          'warning',
+        );
+      }
+    } else {
+      const local = { ...payload, id: Date.now(), createdAt: new Date().toISOString() };
+      setPlantings((prev) => [local, ...prev]);
+      await dbUtils.savePlanting(local);
+      await dbUtils.addToSyncQueue('CREATE_PLANTING', local);
+      showSnackbar(language === 'en' ? 'Saved offline' : 'E bolokiloe offline', 'warning');
+    }
+
+    setOpenDialog(false);
+    setNewPlanting({ crop: '', plantingDate: format(new Date(), 'yyyy-MM-dd'), area: '', location: '' });
+  };
+
+  // ── Log action ────────────────────────────────────────────────────────────
+  const handleAddAction = async () => {
+    if (!actionText.trim() || !selectedPlanting) return;
+
+    if (navigator.onLine) {
+      try {
+        const { data } = await api.post(`/plantings/${selectedPlanting.id}/action`, {
+          action:   actionText,
+          language: language,
+        });
+        setPlantings((prev) => prev.map((p) => (p.id === data.id ? data : p)));
+        await dbUtils.savePlanting(data);
+        showSnackbar(language === 'en' ? 'Activity logged!' : 'Ketso e ngoliloe!');
+      } catch (err) {
+        console.error('Log action error:', err);
+        const updated = {
+          ...selectedPlanting,
+          lastAction:     actionText,
+          lastActionDate: format(new Date(), 'yyyy-MM-dd'),
+          notes:          actionText,
+          updatedAt:      new Date().toISOString(),
+        };
+        setPlantings((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+        await dbUtils.savePlanting(updated);
+        await dbUtils.addToSyncQueue('LOG_ACTION', { id: selectedPlanting.id, action: actionText });
+        showSnackbar(language === 'en' ? 'Saved offline' : 'E bolokiloe offline', 'warning');
+      }
+    } else {
+      const updated = {
+        ...selectedPlanting,
+        lastAction:     actionText,
+        lastActionDate: format(new Date(), 'yyyy-MM-dd'),
+        notes:          actionText,
+        updatedAt:      new Date().toISOString(),
+      };
+      setPlantings((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      await dbUtils.savePlanting(updated);
+      await dbUtils.addToSyncQueue('LOG_ACTION', { id: selectedPlanting.id, action: actionText });
+    }
+
+    setActionText('');
+    setOpenActionDialog(false);
+  };
+
+  // ── Ask question ──────────────────────────────────────────────────────────
+  const handleAskQuestion = () => {
+    if (!questionText.trim()) return;
+
+    const messageToSend = {
+      text: questionText.trim(),
+      sender: 'user',
+      timestamp: new Date().toISOString(),
+      context: selectedPlanting ? {
+        crop: selectedPlanting.crop,
+        plantingDate: selectedPlanting.plantingDate,
+        location: selectedPlanting.location,
+        stage: getCurrentStage(selectedPlanting)
+      } : null
+    };
+
+    // Save to localStorage
+    localStorage.setItem('pendingMosupisiQuestion', JSON.stringify(messageToSend));
+    
+    // Also save the question text separately to ensure it's passed
+    localStorage.setItem('pendingQuestion_text', questionText.trim());
+
+    setQuestionText('');
+    setOpenQuestionDialog(false);
+    
+    // Navigate to chat
+    navigate('/chat');
+  };
+
+  // ── Get AI advice ─────────────────────────────────────────────────────────
+  const handleGetAdvice = async (planting) => {
+    setSelectedPlanting(planting);
+    setAdviceLoading(true);
+    setOpenAdviceDialog(true);
+    try {
+      const { data } = await api.post(`/plantings/${planting.id}/advice`, {
+        language:    language,
+        userContext: { crop: planting.crop, stage: getCurrentStage(planting) },
+      });
+      setAdviceData(data);
+    } catch (err) {
+      console.error('Advice error:', err);
+      setAdviceData(null);
+      showSnackbar(
+        language === 'en'
+          ? 'Could not fetch advice – check your connection'
+          : 'Ha e khone ho fumana keletso – sheba khokahano ea hau',
+        'error',
+      );
+    } finally {
+      setAdviceLoading(false);
+    }
+  };
+
+  // ── PlantingCard ──────────────────────────────────────────────────────────
+  const PlantingCard = ({ planting }) => {
+    const progress     = calculateGrowthProgress(planting);
+    const currentStage = getCurrentStage(planting);
+    const stages       = cropGrowthStages[planting.crop] || {};
+    const stageInfo    = stages[currentStage] || {
+      description:    'Growing',
+      description_st: 'E ntse e mela',
+      icon:           '🌱',
+    };
+
+    return (
+      <Card sx={{ mb: 2, position: 'relative', overflow: 'visible' }}>
+        <CardHeader
+          avatar={
+            <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
+              {getCropIcon(planting.crop)}
+            </Avatar>
+          }
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography variant="h6">
+                {t(planting.crop)} - {planting.location}
+              </Typography>
+              <Chip
+                label={
+                  planting.status === 'harvested'
+                    ? (language === 'en' ? 'Harvested' : 'E kotutswe')
+                    : (language === 'en' ? 'Growing' : 'E ntse e mela')
+                }
+                size="small"
+                color={planting.status === 'harvested' ? 'success' : 'primary'}
+              />
+            </Box>
+          }
+          subheader={`${language === 'en' ? 'Planted' : 'E jalwe'}: ${formatDate(planting.plantingDate)} | ${language === 'en' ? 'Area' : 'Sebaka'}: ${planting.area}`}
+          action={
+            <Box>
+              <IconButton
+                onClick={() => { setSelectedPlanting(planting); setOpenActionDialog(true); }}
+                sx={{ color: theme.palette.primary.main }}
+                title={language === 'en' ? 'Log activity' : 'Ngola ketso'}
+              >
+                <EditIcon />
+              </IconButton>
+              <IconButton
+                onClick={() => handleGetAdvice(planting)}
+                sx={{ color: theme.palette.primary.main }}
+                title={language === 'en' ? 'Get AI advice' : 'Fumana keletso ea AI'}
+              >
+                <AdviceIcon />
+              </IconButton>
+              <IconButton
+                onClick={() => { setSelectedPlanting(planting); setOpenQuestionDialog(true); }}
+                sx={{ color: theme.palette.primary.main }}
+                title={language === 'en' ? 'Ask a question' : 'Botsa potso'}
+              >
+                <QuestionIcon />
+              </IconButton>
+            </Box>
+          }
+        />
+
+        <CardContent>
+          {planting.status !== 'harvested' && (
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" color="textSecondary">
+                  {language === 'en' ? 'Growth Progress' : 'Tsoelopele'}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {Math.round(progress)}%
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={progress}
+                sx={{
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor: theme.palette.grey[300],
+                  '& .MuiLinearProgress-bar': {
+                    background: `linear-gradient(90deg, ${theme.palette.success.light}, ${theme.palette.success.main})`,
+                  },
+                }}
+              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <span>{stageInfo.icon}</span>
+                  {language === 'en' ? 'Current' : 'Ha joale'}:{' '}
+                  {language === 'en' ? stageInfo.description : stageInfo.description_st}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary" display="block">
+                {language === 'en' ? 'Last Action' : 'Ketso ea ho qetela'}
+              </Typography>
+              <Typography variant="body2">
+                {planting.lastAction}{' '}
+                {planting.lastActionDate ? `(${formatShortDate(planting.lastActionDate)})` : ''}
+              </Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary" display="block">
+                {language === 'en' ? 'Notes' : 'Lintlha'}
+              </Typography>
+              <Typography variant="body2">{planting.notes}</Typography>
+            </Grid>
+          </Grid>
+
+          {planting.status === 'harvested' && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: theme.palette.success.light, borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom sx={{ color: 'white' }}>
+                {language === 'en' ? 'Next Steps – Soil Preparation' : 'Mehato e latelang – Tokiso ea Mobu'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'white', opacity: 0.9 }}>
+                <strong>{language === 'en' ? 'Next crop' : 'Sejalo se latelang'}:</strong>{' '}
+                {t(cropRotation[planting.crop]?.next[0])}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'white', opacity: 0.9, mt: 0.5 }}>
+                <strong>{language === 'en' ? 'Preparation' : 'Tokiso'}:</strong>{' '}
+                {language === 'en'
+                  ? cropRotation[planting.crop]?.soilPrep
+                  : cropRotation[planting.crop]?.soilPrep_st}
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <AgricultureIcon sx={{ fontSize: 40, color: theme.palette.primary.main }} />
+          <Typography variant="h4" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+            {language === 'en' ? 'Planting Guide' : 'Tataiso ea Ho Jala'}
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setOpenDialog(true)}
+          sx={{ minHeight: 44 }}
+        >
+          {language === 'en' ? 'Add Planting' : 'Kenya Sejalo'}
+        </Button>
+      </Box>
+
+      {/* Summary Cards */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={4}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <SeedlingIcon sx={{ color: theme.palette.success.main, fontSize: 30 }} />
+            <Typography variant="h6">{plantings.filter((p) => p.status === 'growing').length}</Typography>
+            <Typography variant="caption">{language === 'en' ? 'Active Crops' : 'Lijalo tse Melang'}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={4}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <CheckCircleIcon sx={{ color: theme.palette.warning.main, fontSize: 30 }} />
+            <Typography variant="h6">{plantings.filter((p) => p.status === 'harvested').length}</Typography>
+            <Typography variant="caption">{language === 'en' ? 'Harvested' : 'Tse Kotutsoeng'}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={4}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <CalendarIcon sx={{ color: theme.palette.info.main, fontSize: 30 }} />
+            <Typography variant="h6">{plantings.length}</Typography>
+            <Typography variant="caption">{language === 'en' ? 'Total Plantings' : 'Lijalo Tsohle'}</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Plantings List */}
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : plantings.length > 0 ? (
+        plantings.map((planting) => <PlantingCard key={planting.id} planting={planting} />)
+      ) : (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <PlantIcon sx={{ fontSize: 60, color: theme.palette.grey[400], mb: 2 }} />
+          <Typography variant="h6" gutterBottom color="textSecondary">
+            {language === 'en' ? 'No plantings yet' : 'Ha ho lijalo tse ngolisitsoeng'}
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenDialog(true)}
+            sx={{ mt: 2, minHeight: 44 }}
+          >
+            {language === 'en' ? 'Add Your First Planting' : 'Kenya Sejalo sa Pele'}
+          </Button>
+        </Paper>
+      )}
+
+      {/* ── Add Planting Dialog ── */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{language === 'en' ? 'Add New Planting' : 'Kenya Sejalo se Secha'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                select
+                fullWidth
+                label={language === 'en' ? 'Crop' : 'Sejalo'}
+                value={newPlanting.crop}
+                onChange={(e) => setNewPlanting({ ...newPlanting, crop: e.target.value })}
+                SelectProps={{ native: true }}
+              >
+                <option value="">{language === 'en' ? 'Select crop' : 'Khetha sejalo'}</option>
+                {(user?.crops || ['maize', 'sorghum', 'legumes']).map((crop) => (
+                  <option key={crop} value={crop}>{t(crop)}</option>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                type="date"
+                label={language === 'en' ? 'Planting Date' : 'Letsatsi la Ho Jala'}
+                value={newPlanting.plantingDate}
+                onChange={(e) => setNewPlanting({ ...newPlanting, plantingDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={language === 'en' ? 'Area (e.g., 2 hectares)' : 'Sebaka (mohlala, lihekthere tse 2)'}
+                value={newPlanting.area}
+                onChange={(e) => setNewPlanting({ ...newPlanting, area: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={language === 'en' ? 'Location/Field Name' : 'Sebaka/Lebitso la Tšimo'}
+                value={newPlanting.location}
+                onChange={(e) => setNewPlanting({ ...newPlanting, location: e.target.value })}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Cancel' : 'Hlakola'}
+          </Button>
+          <Button onClick={handleAddPlanting} variant="contained" sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Add' : 'Kenya'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Log Activity Dialog ── */}
+      <Dialog open={openActionDialog} onClose={() => setOpenActionDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{language === 'en' ? 'Log Activity' : 'Ngola Ketso'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            label={language === 'en' ? 'What did you do?' : 'U entseng?'}
+            value={actionText}
+            onChange={(e) => setActionText(e.target.value)}
+            sx={{ mt: 2 }}
+            placeholder={
+              language === 'en'
+                ? 'e.g., Watered, applied fertilizer, weeded...'
+                : 'mohlala, Ke noselitse, ke sebelisitse manyolo, ke lehile...'
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenActionDialog(false)} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Cancel' : 'Hlakola'}
+          </Button>
+          <Button onClick={handleAddAction} variant="contained" sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Save' : 'Boloka'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Ask Question Dialog ── */}
+      <Dialog open={openQuestionDialog} onClose={() => setOpenQuestionDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{language === 'en' ? 'Ask a Question' : 'Botsa Potso'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            label={language === 'en' ? 'Your question' : 'Potso ea hau'}
+            value={questionText}
+            onChange={(e) => setQuestionText(e.target.value)}
+            sx={{ mt: 2 }}
+            placeholder={
+              language === 'en'
+                ? `e.g., When should I water my ${selectedPlanting ? t(selectedPlanting.crop) : 'crops'}?`
+                : `mohlala, Ke nosetse neng ${selectedPlanting ? t(selectedPlanting.crop) : 'lijalo'} tsa ka?`
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenQuestionDialog(false)} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Cancel' : 'Hlakola'}
+          </Button>
+          <Button onClick={handleAskQuestion} variant="contained" sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Ask Mosupisi' : 'Botsa Mosupisi'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── AI Advice Dialog ── */}
+      <Dialog open={openAdviceDialog} onClose={() => setOpenAdviceDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {language === 'en' ? '🌱 AI Planting Advice' : '🌱 Keletso ea AI ea Ho Jala'}
+          {selectedPlanting && ` – ${t(selectedPlanting.crop)}`}
+        </DialogTitle>
+        <DialogContent>
+          {adviceLoading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4, gap: 2 }}>
+              <CircularProgress />
+              <Typography color="textSecondary">
+                {language === 'en' ? 'Generating advice from Agromet Bulletin…' : 'E hlahisa keletso ho tsoa Agromet Bulletin…'}
+              </Typography>
+            </Box>
+          ) : adviceData ? (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                {language === 'en' ? 'Advice' : 'Keletso'}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                {language === 'en' ? adviceData.advice_en : adviceData.advice_st}
+              </Typography>
+
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                {language === 'en' ? 'Weather Outlook' : 'Boemo ba Leholimo'}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                {language === 'en' ? adviceData.weather_outlook_en : adviceData.weather_outlook_st}
+              </Typography>
+
+              {adviceData.rotation_recommendation && (
+                <>
+                  <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                    {language === 'en' ? 'Crop Rotation' : 'Phetiso ea Lijalo'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    {adviceData.rotation_recommendation.reason}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {language === 'en'
+                      ? adviceData.rotation_recommendation.soilPrep
+                      : adviceData.rotation_recommendation.soilPrep_st}
+                  </Typography>
+                </>
+              )}
+
+              {adviceData.sources?.length > 0 && (
+                <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: 'block' }}>
+                  📄 {adviceData.sources.join(', ')}
+                </Typography>
+              )}
+            </Box>
+          ) : (
+            <Typography color="error">
+              {language === 'en' ? 'Failed to load advice.' : 'Ho hapolla keletso ho hlolehile.'}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAdviceDialog(false)} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Close' : 'Koala'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Snackbar notifications ── */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Container>
+  );
+}
+
+export default PlantingGuide;

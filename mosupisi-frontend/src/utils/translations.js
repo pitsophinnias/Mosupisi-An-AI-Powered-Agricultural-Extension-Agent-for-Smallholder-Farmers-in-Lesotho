@@ -1,0 +1,349 @@
+// Comprehensive translation utility
+export const translations = {
+  en: {
+    // App
+    'app.name': 'Mosupisi',
+    'app.tagline': 'AI-Powered Agricultural Extension Agent',
+    
+    // Navigation
+    'nav.dashboard': 'Dashboard',
+    'nav.chat': 'Chat',
+    'nav.profile': 'Profile',
+    'nav.weather': 'Weather',
+    'nav.logout': 'Logout',
+    'nav.login': 'Login',
+    'nav.register': 'Register',
+    
+    // Common
+    'welcome': 'Welcome',
+    'loading': 'Loading...',
+    'save': 'Save',
+    'cancel': 'Cancel',
+    'edit': 'Edit',
+    'delete': 'Delete',
+    'confirm': 'Confirm',
+    'back': 'Back',
+    'next': 'Next',
+    'submit': 'Submit',
+    'search': 'Search',
+    'filter': 'Filter',
+    'clear': 'Clear',
+    'offline': 'You are offline',
+    'online': 'You are back online',
+    'error': 'An error occurred',
+    'success': 'Success',
+    'refresh': 'Refresh',
+    'view': 'View',
+    'viewAll': 'View All',
+    'close': 'Close',
+    
+    // Weather
+    'weather.title': 'Weather & Alerts',
+    'weather.temperature': 'Temperature',
+    'weather.rain': 'Rain Chance',
+    'weather.humidity': 'Humidity',
+    'weather.wind': 'Wind Speed',
+    'weather.condition': 'Condition',
+    'weather.sunny': 'Sunny',
+    'weather.rainy': 'Rainy',
+    'weather.cloudy': 'Cloudy',
+    'weather.stormy': 'Stormy',
+    'weather.forecast': 'Forecast',
+    'weather.alerts': 'Alerts',
+    'weather.today': "Today's Weather",
+    'weather.min': 'Min',
+    'weather.max': 'Max',
+    'weather.alert.heavy_rain': 'Heavy rainfall expected. Protect young crops.',
+    'weather.alert.storm': 'Storm warning. Secure livestock and harvest ripe crops.',
+    'weather.alert.high_temp': 'High temperature. Ensure adequate irrigation.',
+    
+    // Chat
+    'chat.title': 'Ask Mosupisi',
+    'chat.input': 'Type your question...',
+    'chat.send': 'Send',
+    'chat.thinking': 'Thinking...',
+    'chat.sources': 'Sources',
+    'chat.suggested': 'Suggested Questions',
+    'chat.greeting': '👋 Ask me anything about farming in Lesotho!',
+    'chat.greeting_st': '👋 Ntsebise eng kapa eng ka temo Lesotho!',
+    'chat.offline_mode': 'Offline Mode - Using cached responses',
+    'chat.online_mode': 'Online - Connected',
+    
+    // Dashboard
+    'dashboard.quick_actions': 'Quick Actions',
+    'dashboard.recent_advice': 'Recent Advice',
+    'dashboard.your_activity': 'Your Activity',
+    'dashboard.crop_guides': 'Your Crop Guides',
+    'dashboard.queries': 'Queries',
+    'dashboard.crops': 'Crops',
+    'dashboard.alerts': 'Alerts',
+    'dashboard.no_queries': 'No queries yet. Ask Mosupisi a question!',
+    'dashboard.ask_question': 'Ask Question',
+    
+    // Profile
+    'profile.title': 'Farmer Profile',
+    'profile.mobile': 'Mobile Number',
+    'profile.region': 'Region',
+    'profile.crops': 'Crops',
+    'profile.language': 'Preferred Language',
+    'profile.update': 'Update Profile',
+    'profile.history': 'Query History',
+    'profile.joined': 'Member since',
+    'profile.edit': 'Edit Profile',
+    'profile.save': 'Save Changes',
+    'profile.cancel': 'Cancel',
+    'profile.update_success': 'Profile updated successfully!',
+    'profile.update_error': 'Failed to update profile',
+    'profile.no_history': 'No queries yet',
+    'profile.no_history_desc': 'Ask Mosupisi a question to get started',
+    
+    // Auth
+    'login.title': 'Login to Mosupisi',
+    'login.mobile': 'Mobile Number',
+    'login.password': 'Password',
+    'login.button': 'Login',
+    'login.forgot': 'Forgot Password?',
+    'login.noAccount': "Don't have an account? Register",
+    'login.success': 'Login successful!',
+    'login.error': 'Invalid mobile number or password',
+    'login.demo_hint': 'Demo: Use 266-1234-5678 (any password)',
+    
+    'register.title': 'Register as Farmer',
+    'register.name': 'Full Name',
+    'register.mobile': 'Mobile Number',
+    'register.region': 'Region',
+    'register.crops': 'Select Crops',
+    'register.language': 'Preferred Language',
+    'register.button': 'Register',
+    'register.haveAccount': 'Already have an account? Login',
+    'register.success': 'Registration successful!',
+    'register.error': 'Registration failed',
+    'register.select_crops': 'Select at least one crop',
+    
+    // Crops
+    'maize': 'Maize',
+    'sorghum': 'Sorghum',
+    'legumes': 'Legumes',
+    'beans': 'Beans',
+    'peas': 'Peas',
+    'crop.maize': 'Maize',
+    'crop.sorghum': 'Sorghum',
+    'crop.legumes': 'Legumes',
+    
+    // Regions
+    'regions.maseru': 'Maseru',
+    'regions.leribe': 'Leribe',
+    'regions.mafeteng': 'Mafeteng',
+    'regions.mohaleshoek': "Mohale's Hoek",
+    'regions.quthing': 'Quthing',
+    'regions.buthabuthe': 'Butha-Buthe',
+    'regions.mokhotlong': 'Mokhotlong',
+    'regions.thabatseka': "Thaba-Tseka",
+    
+    // Alerts
+    'alert.frost': 'Frost risk - protect crops',
+    'alert.drought': 'Drought conditions - conserve water',
+    'alert.flood': 'Flood warning - move livestock to high ground',
+    'alert.pest': 'Pest outbreak - monitor fields',
+    'alert.heavy_rain': 'Heavy rainfall expected',
+    'alert.high_temp': 'High temperature expected',
+    
+    // Tips
+    'tip.planting': 'Best time to plant',
+    'tip.harvest': 'Harvest time',
+    'tip.fertilizer': 'Fertilizer application',
+    'tip.water': 'Water management',
+    'tip.pest_control': 'Pest control',
+    
+    // Errors
+    'error.general': 'Something went wrong',
+    'error.network': 'Network error. Please check your connection.',
+    'error.offline': 'You are offline. Some features may be limited.',
+    'error.login': 'Login failed. Please try again.',
+    'error.register': 'Registration failed. Please try again.',
+    'error.save': 'Failed to save. Please try again.',
+    
+    // Placeholders
+    'placeholder.question': 'e.g., When to plant maize in Maseru?',
+    'placeholder.search': 'Search...',
+    'placeholder.name': 'Enter your full name',
+    'placeholder.mobile': '266-XXXX-XXXX',
+  },
+  
+  st: {
+    // App
+    'app.name': 'Mosupisi',
+    'app.tagline': 'Moemeli oa Temo o Matlafalitsoeng ke AI',
+    
+    // Navigation
+    'nav.dashboard': 'Diboto',
+    'nav.chat': 'Puisano',
+    'nav.profile': 'Boitsebiso',
+    'nav.weather': 'Boemo ba Leholimo',
+    'nav.logout': 'Tsoa',
+    'nav.login': 'Kena',
+    'nav.register': 'Ingodisetse',
+    
+    // Common
+    'welcome': 'Lumela',
+    'loading': 'E ntse e jarolla...',
+    'save': 'Boloka',
+    'cancel': 'Hlakola',
+    'edit': 'Ntlafatsa',
+    'delete': 'Hlakola',
+    'confirm': 'Netefatsa',
+    'back': 'Morao',
+    'next': 'Pele',
+    'submit': 'Romela',
+    'search': 'Batla',
+    'filter': 'Sefa',
+    'clear': 'Hlakola',
+    'offline': 'Ha u hokahane le inthanete',
+    'online': 'U hokahane le inthanete hape',
+    'error': 'Phoso e etsahetse',
+    'success': 'Atlehile',
+    'refresh': 'Nchafatsa',
+    'view': 'Bona',
+    'viewAll': 'Bona Tsohle',
+    'close': 'Kwala',
+    
+    // Weather
+    'weather.title': 'Boemo ba Leholimo le Litemoso',
+    'weather.temperature': 'Mocheso',
+    'weather.rain': 'Monyetla oa Pula',
+    'weather.humidity': 'Mongobo',
+    'weather.wind': 'Lebelo la Moea',
+    'weather.condition': 'Boemo',
+    'weather.sunny': 'Chesa',
+    'weather.rainy': 'Pula',
+    'weather.cloudy': 'Khoalifi',
+    'weather.stormy': 'Sefefo',
+    'weather.forecast': 'Boemo bo Lebelletsoeng',
+    'weather.alerts': 'Litemoso',
+    'weather.today': 'Boemo ba Kajeno',
+    'weather.min': 'Bonyane',
+    'weather.max': 'Boholo',
+    'weather.alert.heavy_rain': 'Pula e matla e lebelletsoe. Sireletsa lijalo tse nyane.',
+    'weather.alert.storm': 'Temoso ea sefefo. Boloka liphoofolo le ho kotula lijalo tse butsoitseng.',
+    'weather.alert.high_temp': 'Mocheso o phahamile. Etsa bonnete ba ho nosetsa.',
+    
+    // Chat
+    'chat.title': 'Botsa Mosupisi',
+    'chat.input': 'Ngola potso ea hau...',
+    'chat.send': 'Romela',
+    'chat.thinking': 'E ntse e nahana...',
+    'chat.sources': 'Mehlodi',
+    'chat.suggested': 'Lipotso tse Khothalelitsoeng',
+    'chat.greeting': '👋 Ntsebise eng kapa eng ka temo Lesotho!',
+    'chat.greeting_st': '👋 Ntsebise eng kapa eng ka temo Lesotho!',
+    'chat.offline_mode': 'Ha u hokahane - Ho sebelisoa likarabo tse bolokiloeng',
+    'chat.online_mode': 'U hokahane - E sebetsa',
+    
+    // Dashboard
+    'dashboard.quick_actions': 'Diketsahalo tse Potlakileng',
+    'dashboard.recent_advice': 'Likeletso tsa Morao tjena',
+    'dashboard.your_activity': 'Mesebetsi ea Hau',
+    'dashboard.crop_guides': 'Litaelo tsa Lijalo tsa Hau',
+    'dashboard.queries': 'Lipotso',
+    'dashboard.crops': 'Lijalo',
+    'dashboard.alerts': 'Litemoso',
+    'dashboard.no_queries': 'Ha ho lipotso. Botsa Mosupisi potso!',
+    'dashboard.ask_question': 'Botsa Potso',
+    
+    // Profile
+    'profile.title': 'Boitsebiso ba Sehoai',
+    'profile.mobile': 'Nomoro ea Mohala',
+    'profile.region': 'Setereke',
+    'profile.crops': 'Lijalo',
+    'profile.language': 'Puo eo u e Ratang',
+    'profile.update': 'Ntlafatsa Boitsebiso',
+    'profile.history': 'Nalane ea Lipotso',
+    'profile.joined': 'Moembere ho tloha',
+    'profile.edit': 'Ntlafatsa Boitsebiso',
+    'profile.save': 'Boloka Liphetoho',
+    'profile.cancel': 'Hlakola',
+    'profile.update_success': 'Boitsebiso bo ntlafalitsoe!',
+    'profile.update_error': 'Ho hlolehile ho ntlafatsa boitsebiso',
+    'profile.no_history': 'Ha ho lipotso',
+    'profile.no_history_desc': 'Botsa Mosupisi potso ho qala',
+    
+    // Auth
+    'login.title': 'Kena ho Mosupisi',
+    'login.mobile': 'Nomoro ea Mohala',
+    'login.password': 'Phasewete',
+    'login.button': 'Kena',
+    'login.forgot': 'U lebetse Phasewete?',
+    'login.noAccount': 'Ha u na akhaonto? Ingodisetse',
+    'login.success': 'U kene ka katleho!',
+    'login.error': 'Nomoro kapa phasewete e fosahetse',
+    'login.demo_hint': 'Demo: Sebelisa 266-1234-5678 (phasewete efe kapa efe)',
+    
+    'register.title': 'Ingodisetse joalo ka Sehoai',
+    'register.name': 'Lebitso le Felletseng',
+    'register.mobile': 'Nomoro ea Mohala',
+    'register.region': 'Setereke',
+    'register.crops': 'Khetha Lijalo',
+    'register.language': 'Puo eo u e Ratang',
+    'register.button': 'Ingodisetse',
+    'register.haveAccount': 'U se u na le akhaonto? Kena',
+    'register.success': 'Boingodiso bo atlehile!',
+    'register.error': 'Boingodiso bo hlolehile',
+    'register.select_crops': 'Khetha bonyane sejalo se le seng',
+    
+    // Crops
+    'maize': 'Poone',
+    'sorghum': 'Mabele',
+    'legumes': 'Linaoa',
+    'beans': 'Linaoa',
+    'peas': 'Lierekisi',
+    'crop.maize': 'Poone',
+    'crop.sorghum': 'Mabele',
+    'crop.legumes': 'Linaoa',
+    
+    // Regions
+    'regions.maseru': 'Maseru',
+    'regions.leribe': 'Leribe',
+    'regions.mafeteng': 'Mafeteng',
+    'regions.mohaleshoek': "Mohale's Hoek",
+    'regions.quthing': 'Quthing',
+    'regions.buthabuthe': 'Butha-Buthe',
+    'regions.mokhotlong': 'Mokhotlong',
+    'regions.thabatseka': "Thaba-Tseka",
+    
+    // Alerts
+    'alert.frost': 'Kotsi ya seramela - sireletsa lijalo',
+    'alert.drought': 'Komello - boloka metsi',
+    'alert.flood': 'Temoso ya likhohola - isa liphoofolo libakeng tse phahameng',
+    'alert.pest': 'Ho phatloha ha likokonyana - hlahloba masimo',
+    'alert.heavy_rain': 'Pula e matla e lebelletsoe',
+    'alert.high_temp': 'Mocheso o phahameng o lebelletsoe',
+    
+    // Tips
+    'tip.planting': 'Nako e ntle ea ho jala',
+    'tip.harvest': 'Nako ea kotulo',
+    'tip.fertilizer': 'Ho sebelisa manyolo',
+    'tip.water': 'Taolo ea metsi',
+    'tip.pest_control': 'Taolo ea likokonyana',
+    
+    // Errors
+    'error.general': 'Ho na le phoso',
+    'error.network': 'Phoso ya marangrang. Ka kopo hlahloba khokahano.',
+    'error.offline': 'Ha u hokahane. Dikarolo tse ding ha di sebetse.',
+    'error.login': 'Ho kena ho hlolehile. Ka kopo leka hape.',
+    'error.register': 'Boingodiso bo hlolehile. Ka kopo leka hape.',
+    'error.save': 'Ho boloka ho hlolehile. Ka kopo leka hape.',
+    
+    // Placeholders
+    'placeholder.question': 'mohlala, Nako ya ho jala poone Maseru?',
+    'placeholder.search': 'Batla...',
+    'placeholder.name': 'Ngola lebitso la hau',
+    'placeholder.mobile': '266-XXXX-XXXX',
+  }
+};
+
+// Translation function
+export const t = (key, language = 'en') => {
+  return translations[language]?.[key] || translations['en'][key] || key;
+};
+
+export default translations;

@@ -1,0 +1,40 @@
+New-Item .gitignore -ItemType File
+notepad .gitignore
+```
+
+Paste this into Notepad and save:
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.db
+*.sqlite3
+
+# Model files (too large for git)
+*.gguf
+*.onnx
+*.bin
+models/
+
+# Node
+node_modules/
+npm-debug.log
+
+# Environment files (contains API keys)
+.env
+
+# ChromaDB
+chroma_db/
+
+# Build
+build/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,21 @@
+{
+  "name": "mosupisi-chat-service",
+  "version": "1.0.0",
+  "description": "AI Chat Service for Mosupisi - Agricultural Extension Agent",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "openai": "^3.3.0",
+    "winston": "^3.9.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}
