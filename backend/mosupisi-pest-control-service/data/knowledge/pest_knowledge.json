@@ -1,0 +1,503 @@
+{
+  "pests": [
+    {
+      "id": "fall_armyworm",
+      "name": "Fall Armyworm",
+      "name_st": "Sesobeng sa poone",
+      "scientific_name": "Spodoptera frugiperda",
+      "crops": ["maize", "sorghum", "wheat"],
+      "season": "November-March",
+      "severity": "high",
+      "description": "Fall Armyworm is the most destructive pest of maize in Lesotho, thriving during the warm, wet summer season (November to March). It is a moth whose larvae cause severe damage by feeding on leaves and burrowing into the whorl and cobs of maize plants.",
+      "symptoms": [
+        "Ragged holes in leaves with a characteristic 'window-pane' pattern",
+        "Pinholes in young whorl leaves",
+        "Presence of frass (sawdust-like droppings) in the whorl",
+        "Damaged or missing tassels",
+        "Larvae visible inside the whorl, especially early morning or evening",
+        "Skeletonized leaves in severe infestations"
+      ],
+      "symptoms_st": [
+        "Masoba a makhasing a nang le sebopeho sa 'window-pane'",
+        "Masoba a manyenyane makhasing a mocha",
+        "Tšila ea larva ka hare ho whorl",
+        "Tassels tse senyehileng kapa tse siileng",
+        "Larva e bonoa ka hare ho whorl matsatsi a hoseng kapa mantsiboea"
+      ],
+      "treatment": {
+        "chemical": [
+          "Apply emamectin benzoate (e.g., Coragen, Proclaim) into the whorl at 5-10% infestation",
+          "Chlorpyrifos or lambda-cyhalothrin as foliar sprays",
+          "Spinosad-based insecticides are effective and less harmful to natural enemies"
+        ],
+        "biological": [
+          "Apply Bacillus thuringiensis (Bt) formulations into the whorl at early infestation stages",
+          "Encourage natural enemies: Telenomus remus (egg parasitoid), Chelonus sp., and predatory beetles",
+          "Apply entomopathogenic fungi such as Beauveria bassiana"
+        ],
+        "cultural": [
+          "Early planting before November to avoid peak moth flight",
+          "Plant push-pull companion crops: Napier grass as border crop, Desmodium as intercrop",
+          "Hand-pick egg masses and young larvae early in the season",
+          "Apply sand or ash mixed with soil into the whorl to deter larvae",
+          "Apply neem extract (10 ml neem oil per liter of water with a few drops of soap) into the whorl"
+        ],
+        "treatment_st": [
+          "Jala kapele place pele ho Phato ho qoba ho falla ha moth ka boraro bo setseng",
+          "Sebelisa tholoana ea neem (jele neem ka 10 ml ho litra ea metsi le lithe tse 'maloa tsa sesepa) ka hare ho whorl",
+          "Tšela moqoqo kapa lesoha le kopantsoeng le mobu ka hare ho whorl",
+          "Nka mahe le larva ka letsoho bofelong ba selemo"
+        ]
+      },
+      "prevention": [
+        "Rotate crops each season - avoid consecutive maize planting",
+        "Plant early maturing maize varieties (before November)",
+        "Use resistant/tolerant maize varieties where available",
+        "Scout fields at least twice per week during vegetative stage",
+        "Use pheromone traps to monitor adult moth populations",
+        "Maintain field sanitation - destroy crop residues after harvest",
+        "Intercrop maize with beans or cowpeas to disrupt pest habitat"
+      ],
+      "economic_threshold": "Apply control measures when 5-10% of plants show infestation in the whorl stage, or when 2+ larvae per plant are found.",
+      "monitoring": "Inspect 20 plants per field site (at least 5 sites across the field). Check whorl for frass, larvae, and leaf damage. Scout in early morning when larvae are more visible.",
+      "lesotho_context": "Fall Armyworm has been present in Lesotho since around 2017 and is now a major seasonal threat, particularly in the lowlands and foothills. The Lesotho Meteorological Services monitors its spread through seasonal agrometeorological bulletins. Peak risk is during warm, humid periods from December to February.",
+      "image_emoji": "🐛"
+    },
+    {
+      "id": "maize_stalk_borer",
+      "name": "Maize Stalk Borer",
+      "name_st": "Seboko sa poone",
+      "scientific_name": "Busseola fusca",
+      "crops": ["maize", "sorghum"],
+      "season": "Year-round (peak October-February)",
+      "severity": "high",
+      "description": "The African maize stalk borer is one of the most economically important pests of maize and sorghum in Lesotho and sub-Saharan Africa. Larvae tunnel into plant stems and can cause total crop loss if uncontrolled.",
+      "symptoms": [
+        "Dead heart symptom in young plants (central whorl dries and turns brown)",
+        "Tiny pinholes in leaf sheaths caused by early instar larvae",
+        "Frass at the base of the plant or inside stalks",
+        "Broken tassels due to stalk tunneling",
+        "Stem breakage at heading stage",
+        "Visible entry holes at stem nodes",
+        "Late-season symptom: cob damage and ear rot"
+      ],
+      "symptoms_st": [
+        "Mokopu o omileng o mosuoe ho litšalo tse ncha (dead heart)",
+        "Masoba a manyenyane makhasing a mocha",
+        "Tšila ka hare ho stalk kapa fatshe ho tsala",
+        "Tassels tse senyehileng ka lebaka la tunneling ea stalk"
+      ],
+      "treatment": {
+        "chemical": [
+          "Apply granular insecticides (e.g., carbofuran, chlorpyrifos granules) into the whorl at early stage",
+          "Foliar spray with lambda-cyhalothrin or cypermethrin when egg hatching begins",
+          "Repeat applications every 10-14 days during vegetative stage if infestation persists"
+        ],
+        "biological": [
+          "Apply Cotesia sesamiae (parasitic wasp) for biological control",
+          "Use Bt (Bacillus thuringiensis var. kurstaki) granules applied to the whorl",
+          "Encourage natural predators such as birds, ground beetles, and spiders"
+        ],
+        "cultural": [
+          "Early planting to escape peak moth oviposition period",
+          "Harvest and destroy crop residues promptly after harvest",
+          "Deep plowing to expose and kill pupae in soil",
+          "Intercropping with legumes (beans, cowpeas) to create less favorable habitat",
+          "Ash application into the whorl as a low-cost deterrent"
+        ],
+        "treatment_st": [
+          "Jala kapele ho qoba nako ea boholo ba bofolisi ba moth",
+          "Chemsa le ho chetsa masala a lijalo ka pela ka mora kotulo",
+          "Lema ka botebo ho senya li-pupae tse mobung",
+          "Tšela lesoha ka hare ho whorl joalo ka thibelo e itekanetseng moputso"
+        ]
+      },
+      "prevention": [
+        "Deep tillage to destroy pupae in crop residues",
+        "Crop rotation (avoid maize after maize in same field)",
+        "Timely planting - align with optimal planting window",
+        "Use of Bt maize varieties where registered",
+        "Regular field scouting from emergence to tasseling",
+        "Remove and burn crop residues after harvest",
+        "Push-pull cropping system with Napier grass and Desmodium"
+      ],
+      "economic_threshold": "Action required when dead heart symptoms exceed 5% of plants, or when 1+ egg mass per 10 plants is found during scouting.",
+      "monitoring": "Scout from crop emergence to 6-leaf stage. Look for dead hearts, egg masses on leaf undersides, and frass at stem base. Check 20-30 plants per hectare at multiple sites.",
+      "lesotho_context": "Maize stalk borer is endemic to Lesotho and has been a persistent threat throughout the growing season. Field inspections by LMS in January 2026 documented high stalk borer incidents in Thaba-Tseka district, with farmers forced to replant in some areas.",
+      "image_emoji": "🐜"
+    },
+    {
+      "id": "aphids",
+      "name": "Cereal Aphids",
+      "name_st": "Dintsi tsa lijalo",
+      "scientific_name": "Rhopalosiphum maidis / Melanaphis sacchari",
+      "crops": ["maize", "sorghum", "wheat"],
+      "season": "Dry season (May-September), can occur November-February on maize",
+      "severity": "medium",
+      "description": "Several aphid species attack cereals in Lesotho. The corn leaf aphid attacks maize, while the sorghum aphid attacks sorghum. They suck sap from leaves and can transmit plant viruses. Large infestations cause direct damage and indirectly affect yield through honeydew and sooty mould.",
+      "symptoms": [
+        "Yellowing and curling of leaves",
+        "Sticky honeydew deposits on leaves",
+        "Black sooty mould growing on honeydew",
+        "Visible colonies of small soft-bodied insects on undersides of leaves",
+        "Ant activity on plants (ants tend aphids for honeydew)",
+        "Stunted plant growth in severe infestations",
+        "Premature leaf senescence"
+      ],
+      "symptoms_st": [
+        "Makhasi a mosehla le a phurulohanang",
+        "Monko o khotle wa honeydew makhasing",
+        "Hloibila e ntso e holang honeydewing",
+        "Likhele tse nyane tse bonehang ka tlas'a makhasi"
+      ],
+      "treatment": {
+        "chemical": [
+          "Imidacloprid or thiamethoxam seed treatment for early protection",
+          "Foliar spray with dimethoate or pirimicarb when colonies exceed threshold",
+          "Avoid broad-spectrum insecticides that kill natural enemies (ladybirds, lacewings)"
+        ],
+        "biological": [
+          "Encourage ladybird beetles (Coccinellidae) - major natural predators",
+          "Lacewings and parasitic wasps (Aphidius spp.) provide natural control",
+          "Neem extract spray (10ml/liter) disrupts aphid reproduction",
+          "Strong water jet spray to dislodge aphid colonies from plants"
+        ],
+        "cultural": [
+          "Avoid excessive nitrogen fertilization which promotes lush growth attractive to aphids",
+          "Remove weeds that serve as alternate aphid hosts",
+          "Plant trap crops such as barley or susceptible varieties around field borders"
+        ],
+        "treatment_st": [
+          "Qoba manyolo a mangata a nitrogen a hotsang ho hola ha likhele",
+          "Tlosa moqoqo o sebelang joalo ka moabeli o mong oa likhele",
+          "Fafatsa motsoako oa neem (10ml/liter) ho thibela ho tsoala ha likhele"
+        ]
+      },
+      "prevention": [
+        "Plant resistant or tolerant varieties",
+        "Avoid excessive use of nitrogen fertilizers",
+        "Maintain balanced plant nutrition",
+        "Encourage biodiversity around fields to support natural enemies",
+        "Regular monitoring to catch infestations early",
+        "Avoid late planting which increases aphid pressure"
+      ],
+      "economic_threshold": "Control needed when aphid colonies cover >50% of upper leaves before tasseling, or >50% of leaves at grain fill.",
+      "monitoring": "Check underside of leaves and growing points weekly. Count colonies and look for natural enemy presence (ladybirds, lacewing larvae). Also watch for ants tending aphids.",
+      "lesotho_context": "Aphid infestations in Lesotho are typically worse during dry spells within the growing season. The 2018-2019 season saw aphid pressure in the south, where dry spell conditions prevailed.",
+      "image_emoji": "🦟"
+    },
+    {
+      "id": "bean_bruchid",
+      "name": "Bean Bruchid / Bean Weevil",
+      "name_st": "Boea ba linaoa",
+      "scientific_name": "Acanthoscelides obtectus / Callosobruchus maculatus",
+      "crops": ["legumes", "beans", "cowpeas"],
+      "season": "Post-harvest (year-round in storage)",
+      "severity": "medium",
+      "description": "Bean bruchids are storage pests that damage dry beans and cowpeas. Infestation often starts in the field before harvest, but damage becomes catastrophic in storage if not controlled. A single generation can destroy an entire stored seed stock.",
+      "symptoms": [
+        "Round exit holes in bean seeds (3-4mm diameter)",
+        "Presence of fine powdery dust (frass) in storage",
+        "Small white eggs laid on or inside seed coats",
+        "Visible adult beetles in storage containers",
+        "Hollow, lightweight seeds when shaken",
+        "Characteristic musty smell in infested storage"
+      ],
+      "symptoms_st": [
+        "Masoba a moniloano menyolelong ea linaoa (3-4mm)",
+        "Phofu e monyenyane e boputsoane (tšila) polokellong",
+        "Mahe a masoeu a kopileng hodima kapa ka hare ho thapo ea pere",
+        "Linonyana tse holletsoeng ka hare ho ncha tse bolokisoang",
+        "Monko o sa nkeheng kapa ho bola polokellong e kenang"
+      ],
+      "treatment": {
+        "chemical": [
+          "Phosphine fumigation in sealed storage (professional use only)",
+          "Dust storage with approved grain protectant powders (malathion dust - check local registration)",
+          "Insecticide treatment of storage bags before filling"
+        ],
+        "biological": [
+          "Mix dried neem leaves with stored beans (5kg neem leaves per 100kg beans)",
+          "Apply diatomaceous earth (DE) at 1g per kg of grain - physically damages beetle exoskeleton",
+          "Wood ash mixed with grain - traditional and effective method",
+          "Bay leaves mixed with stored beans deter adult beetles"
+        ],
+        "cultural": [
+          "Use hermetic (airtight) storage bags (PICS bags, metal silos) to suffocate beetles",
+          "Sun-dry beans thoroughly (moisture below 12%) before storage",
+          "Harvest beans before pods dry completely to reduce field infestation",
+          "Clean storage containers thoroughly before new storage",
+          "Store in cool, dark location to slow beetle development"
+        ],
+        "treatment_st": [
+          "Sebelisa mekotla e koalehang (PICS bags, lipoto tsa tšepe) ho bolaya linonyana ka ho tlala moya",
+          "Omisa linaoa hantle (moisture e tlase ho 12%) pele ho boloka",
+          "Kopanya makhasi a neem a omileng le linaoa tse bolokiloeng (5kg neem ho 100kg linaoa)",
+          "Sebelisa lesoha la pere kapa diatomaceous earth ho sireletsa linaoa"
+        ]
+      },
+      "prevention": [
+        "Harvest at optimal maturity to minimize field infestation",
+        "Dry beans thoroughly before storage",
+        "Use hermetic storage systems",
+        "Inspect stored grain monthly",
+        "Never mix new beans with previously stored (possibly infested) beans",
+        "Keep storage facilities clean and free of old grain debris"
+      ],
+      "economic_threshold": "Control needed when more than 2-3 adult beetles are found per kg of stored grain, or at first sign of exit holes in seeds.",
+      "monitoring": "Inspect storage monthly. Sift a sample of grain through a fine mesh to catch adults. Look for exit holes, frass, and live adults. Monitor during first 3 months after storage.",
+      "lesotho_context": "Bean bruchid is a serious post-harvest problem for subsistence farmers in Lesotho who store beans from one season to the next for food and seed. Traditional ash storage methods are commonly used and are effective.",
+      "image_emoji": "🪲"
+    },
+    {
+      "id": "locust",
+      "name": "Locusts",
+      "name_st": "Mahloko",
+      "scientific_name": "Locusta migratoria / Schistocerca gregaria",
+      "crops": ["maize", "sorghum", "wheat", "pasture"],
+      "season": "October-April (migratory, unpredictable)",
+      "severity": "high",
+      "description": "Locusts can devastate crops in swarms covering many hectares within hours. Both migratory and desert locusts have been recorded in southern Africa. In Lesotho, they pose a seasonal risk especially in drought years. LMS field reports from 2026 documented locust damage to wheat in Malefiloane, Mokhotlong.",
+      "symptoms": [
+        "Complete defoliation of crops and pasture",
+        "Large numbers of insects visible in swarms (many millions per km²)",
+        "Stripped plant stems with leaves fully consumed",
+        "Damage often follows a directional pattern across fields",
+        "Crop loss can be 100% within a swarm path"
+      ],
+      "symptoms_st": [
+        "Ho tlosoa ha makhasi ohle a lijalo le mahlaba",
+        "Liphatsa tsa likhala tsa hloile li bonehang ka lipota (milione tse ngata ka km²)",
+        "Metsu ea limela e hatakiloeng makhasi ohle a jeoeng",
+        "Tahlehelo ea lijalo e ka ba 100% ka mokhahlelong oa pota"
+      ],
+      "treatment": {
+        "chemical": [
+          "Aerial or ground spraying with organophosphate insecticides (malathion, chlorpyrifos) - requires coordination with national authorities",
+          "Ultra-low-volume (ULV) application of deltamethrin or lambda-cyhalothrin",
+          "Emergency pesticide application coordinated with Ministry of Agriculture and FAO"
+        ],
+        "biological": [
+          "Apply Metarhizium acridum (Green Muscle) - a fungus specific to locusts, safe for other organisms",
+          "Effective for hopper bands (nymphs) rather than adult swarms"
+        ],
+        "cultural": [
+          "Early warning: monitor FAO Desert Locust Information Service (DLIS) and LMS bulletins",
+          "Coordinate with neighbors and extension officers for community response",
+          "Drive swarms away using noise and smoke before they land",
+          "Harvest any mature crops immediately if swarm approaching"
+        ],
+        "treatment_st": [
+          "Tseba kapele: sheba litaba tsa FAO le LMS ka mahloko",
+          "Lumellana le bapi le likantoro tsa temo bakeng sa karabo ea sechaba",
+          "Qosetsa lipota ka modumo le musi pele li tlohela",
+          "Kotula lijalo tse holo ha holo haeba pota e atamela"
+        ]
+      },
+      "prevention": [
+        "Monitor LMS seasonal forecasts and FAO locust bulletins",
+        "Report swarm sightings to extension officers immediately",
+        "Participate in community early warning networks",
+        "Keep contact with Ministry of Agriculture for coordinated response plans"
+      ],
+      "economic_threshold": "Any locust swarm sighting in a field is an emergency requiring immediate action and reporting to authorities.",
+      "monitoring": "Watch for locust swarms on the horizon. Monitor FAO locust tracking alerts. Report any sightings to the Ministry of Agriculture and LMS immediately.",
+      "lesotho_context": "LMS field inspection reports from early 2026 documented locust damage to wheat crops in Malefiloane area of Mokhotlong district, where farmers reported that locusts fed on their wheat. This is consistent with regional locust activity in southern Africa.",
+      "image_emoji": "🦗"
+    },
+    {
+      "id": "rust_fungal",
+      "name": "Wheat & Maize Rust",
+      "name_st": "Lehlabathe la koro le poone",
+      "scientific_name": "Puccinia spp.",
+      "crops": ["wheat", "maize", "sorghum"],
+      "season": "Cool, moist periods (April-August for wheat rust)",
+      "severity": "high",
+      "description": "Rust diseases caused by Puccinia fungi are major threats to wheat in Lesotho highlands. Stem rust (Puccinia graminis), yellow rust (Puccinia striiformis) and leaf rust (Puccinia triticina) all occur. Outbreaks are favored by cool, wet conditions and can spread rapidly across fields.",
+      "symptoms": [
+        "Orange-red or brown pustules on leaves (leaf rust)",
+        "Yellow stripes of pustules on leaves (yellow rust/stripe rust)",
+        "Dark brown/black elongated pustules on stems (stem rust)",
+        "Pustules burst and release powdery spores",
+        "Premature leaf death in severe cases",
+        "Shriveled, lightweight grain at harvest"
+      ],
+      "symptoms_st": [
+        "Li-pustule tse pinki-mofubelu kapa tse bothsa makhasing (lehlabathe la makhasi)",
+        "Mela e mosehla ea li-pustule makhasing (lehlabathe la mosehla)",
+        "Li-pustule tse ntso tse telele lithemong (lehlabathe la themo)",
+        "Li-pustule li phatloha le ho ntša spore e boputsoane"
+      ],
+      "treatment": {
+        "chemical": [
+          "Foliar fungicide application - triazoles (propiconazole, tebuconazole) are most effective",
+          "Strobilurin fungicides (azoxystrobin, trifloxystrobin) provide good protection",
+          "Apply at first sign of rust pustules and repeat in 14-21 days",
+          "Protectant fungicide (mancozeb) if resistant varieties unavailable"
+        ],
+        "biological": [
+          "No effective biological controls currently available for rusts",
+          "Resistant varieties are the primary biological approach"
+        ],
+        "cultural": [
+          "Plant resistant wheat varieties (consult extension officer for current registered varieties)",
+          "Avoid late planting which exposes crops to rust-favorable conditions",
+          "Ensure adequate plant nutrition - balanced NPK reduces disease susceptibility",
+          "Remove volunteers and grass weeds that harbor rust between seasons"
+        ],
+        "treatment_st": [
+          "Sebelisa mefuta e hanyetsanang ea koro (botsa mooki oa temo bakeng sa mefuta e ngolisitsoeng)",
+          "Qoba ho jala ka morao ho koana ho hlahisang lijalo tšebetsong ea maemo a rusta",
+          "Fumana phepo e lekaneng ea limela - NPK e lekanetsoeng e theola bokuli"
+        ]
+      },
+      "prevention": [
+        "Use rust-resistant wheat varieties as primary defense",
+        "Plant at the recommended time for your area",
+        "Avoid volunteer plants from previous season",
+        "Ensure good air circulation (avoid very high plant densities)",
+        "Monitor weekly for early rust pustules",
+        "Apply fungicide protectant before rust appears in high-risk years"
+      ],
+      "economic_threshold": "Apply fungicide when rust is first detected. For stripe rust: treat when 5% of leaves show symptoms. For stem rust: treat immediately at first sign.",
+      "monitoring": "Examine flag leaf and upper 2-3 leaves from crop emergence to grain fill. Look for telltale yellow stripes (stripe rust) or orange powder when leaves are rubbed (leaf rust). Check at multiple field sites.",
+      "lesotho_context": "Rust diseases are a significant concern for wheat farmers in the Lesotho highlands and mountains. The cool, moist highland climate is particularly conducive to yellow rust development. Extension officers can advise on current resistant variety availability.",
+      "image_emoji": "🍂"
+    },
+    {
+      "id": "hailstorm_damage",
+      "name": "Hailstorm Damage",
+      "name_st": "Tšenyo ea phoofolo",
+      "scientific_name": "Abiotic stress (hail)",
+      "crops": ["maize", "wheat", "sorghum", "beans", "vegetables"],
+      "season": "October-March (thunderstorm season)",
+      "severity": "high",
+      "description": "Hailstorms are a recurring and devastating weather event in Lesotho during the summer growing season. LMS records documented devastating hailstorms in November 2025 (Maletsunyane area) and January 2026 (Mokhotlong, Khubelu valley) that caused significant livestock and crop losses.",
+      "symptoms": [
+        "Shredded, torn leaves - resembles insect damage but more widespread",
+        "Bruising and cuts on stems and stalks",
+        "Damaged or broken cobs, ears, and pods",
+        "Flattened crops in the direction of storm track",
+        "Sudden widespread damage across entire fields after storms",
+        "Entry points for fungal diseases at wounds"
+      ],
+      "symptoms_st": [
+        "Makhasi a seputsoeng, a phathalletsoe - e ts'oana le tšenyo ea likhala empa e atoloha haholo",
+        "Letšoao le lihaqosong le lithemong",
+        "Likhoaba, matoeba le likotla tse senyehileng",
+        "Lijalo tse oeletseng ka ketso ea seoelo",
+        "Tšenyo e atolohileng ka sebosetso kamora lipoloko"
+      ],
+      "treatment": {
+        "chemical": [
+          "Apply fungicide after hail to prevent fungal infection at wound sites",
+          "Foliar nutrients (zinc, boron) help plants recover faster"
+        ],
+        "biological": [
+          "Allow plants to recover naturally - maize has strong recovery if damage is before tasseling",
+          "Do not replant immediately - assess recovery over 7-10 days first"
+        ],
+        "cultural": [
+          "Assess damage extent before deciding to replant",
+          "Remove badly damaged plants to reduce disease risk",
+          "If replanting is needed, consider shorter-season varieties",
+          "Contact extension officer and local government to report and document losses",
+          "Consider crop insurance schemes if available"
+        ],
+        "treatment_st": [
+          "Hlola boholo ba tšenyo pele o etsa qeto ea ho lema bocha",
+          "Tlosa limela tse senyehileng haholo ho fokotsa kotsi ea bokuli",
+          "Haeba ho lema bocha ho hlokahala, nahana ka mefuta ea motse o moholo ka potlako e nyenyane",
+          "Ikopanye le mooki oa temo le mmuso wa lehae ho tlaleha le ho ngola tahlehelo"
+        ]
+      },
+      "prevention": [
+        "Monitor LMS weather forecasts and warnings daily during summer season",
+        "Avoid planting in known hail-prone valley areas if possible",
+        "Early planting to reduce exposure during peak hail season",
+        "Use protective netting for high-value vegetable crops",
+        "Keep LMS/LNBS contact numbers for weather warnings"
+      ],
+      "economic_threshold": "Any hailstorm event requires immediate field assessment. Report severe damage to local extension offices for government support.",
+      "monitoring": "Check fields within 24 hours after any hailstorm. Photograph and document damage for insurance or disaster relief claims. Monitor for fungal diseases in the 2 weeks following hail.",
+      "lesotho_context": "Hailstorms are a recurring agricultural hazard in Lesotho. The LMS December 2025 bulletin documented devastating hailstorms on 23rd November 2025 in Maletsunyane constituency (massive sheep losses). In January 2026, hail destroyed maize fields in the Khubelu valley in Mokhotlong, with multiple villages affected. Farmers are advised to monitor LMS daily weather bulletins and LNBS for hail warnings.",
+      "image_emoji": "🌨️"
+    },
+    {
+      "id": "cutworms",
+      "name": "Cutworms",
+      "name_st": "Liqhoa tsa mobu",
+      "scientific_name": "Agrotis spp.",
+      "crops": ["maize", "sorghum", "vegetables", "potatoes"],
+      "season": "October-December (at planting time)",
+      "severity": "medium",
+      "description": "Cutworms are soil-dwelling moth larvae that cut seedlings at ground level, causing sudden stand losses early in the season. They are most damaging during early crop establishment and are active at night.",
+      "symptoms": [
+        "Seedlings cut off at soil level overnight",
+        "Wilted seedlings with no visible above-ground pest",
+        "Soil disturbance near plant base",
+        "C-shaped grey or brown larvae found in soil around affected plants",
+        "Random gaps in plant stand in the morning"
+      ],
+      "symptoms_st": [
+        "Litšalo tse sekoalloa fatshe bosiu",
+        "Litšalo tse nyametsoeng ntle le pest e bonahala ka hodima mobu",
+        "Larva e shapang nkeng e bonoa ha o phula mobu haufi le limela tse amehileng"
+      ],
+      "treatment": {
+        "chemical": [
+          "Soil incorporation of chlorpyrifos or carbosulfan before planting",
+          "Bait application: mix insecticide with bran and molasses for night application",
+          "Chlorpyrifos drench around plant base for established infestations"
+        ],
+        "biological": [
+          "Entomopathogenic nematodes (Steinernema spp.) applied to moist soil",
+          "Diatomaceous earth applied around plant bases"
+        ],
+        "cultural": [
+          "Deep plowing exposes pupae to predators and sun before planting",
+          "Flood irrigation or heavy watering to force larvae to surface for bird predation",
+          "Hand-pick larvae from soil around affected plants at night or at sunrise",
+          "Delay planting by 2-3 weeks after first rains to allow larvae to feed on weeds first"
+        ],
+        "treatment_st": [
+          "Lema ka botebo ho hlahisa li-pupae ho linonyana le letsatsi pele ho jala",
+          "Phuthisa metsi a mangata ho qobella larva ho fihlela holimo bakeng sa linonyana",
+          "Nka larva ka letsoho mobu haufi le limela tse amehileng bosiu kapa hoseng"
+        ]
+      },
+      "prevention": [
+        "Deep plowing before planting to expose and destroy pupae",
+        "Early planting before cutworm populations build up",
+        "Clean field borders and remove weeds before planting",
+        "Use seed dressings with insecticide where cutworms are a known problem"
+      ],
+      "economic_threshold": "Replant or treat when cutworm damage causes >5% stand loss in young seedlings.",
+      "monitoring": "Inspect newly emerged seedlings daily in the first 2-3 weeks after planting. If seedlings are cut, dig in soil around the base to find larvae. Count affected plants per row.",
+      "lesotho_context": "Cutworms are a common problem in Lesotho at planting time (October-November). They are favored by cool, moist soil conditions and are worse in fields with high organic matter or previous grass cover.",
+      "image_emoji": "🐛"
+    }
+  ],
+  "general_prevention_tips": {
+    "crop_rotation": {
+      "en": "Rotating crops breaks pest and disease cycles. Avoid planting the same crop in the same field for consecutive seasons. A common rotation in Lesotho: maize → beans → sorghum → fallow.",
+      "st": "Ho potoloha lijalo ho phá lipotoloho tsa likokonyana le makulane. Qoba ho lema sejalo se le seng sebakeng se le seng lilemong tse latellanang."
+    },
+    "field_sanitation": {
+      "en": "Remove and destroy crop residues after harvest to eliminate pest overwintering sites. Burn or deeply bury infested material. Keep field edges and borders free of weeds.",
+      "st": "Tlosa le ho chetsa masala a lijalo ka mora kotulo ho felisa libaka tsa likokonyana. Chesa kapa patela haholo thepa e kenang. Boloka meeli ea masimo e hlokile moqoqo."
+    },
+    "early_detection": {
+      "en": "Scout fields at least weekly. Check 20 plants per site at 5+ locations across the field. Keep a scouting record. Early detection allows early intervention before populations explode.",
+      "st": "Hlahloba masimo beke le beke. Sheba limela tse 20 sebakeng se seng le se seng ho 5+ libaka tsa tšimo. Boloka rekoto ea hlahloba. Ho lemoa kapele ho lumella ho kenya letsoho pele motho a hola."
+    },
+    "integrated_pest_management": {
+      "en": "IPM combines cultural, biological, and chemical methods. Start with cultural and biological methods; use chemicals only as a last resort. This protects the environment, reduces costs, and preserves natural pest enemies.",
+      "st": "IPM e kopanya mekhoa ea setso, ea bioloji le ea lik'hemik'hale. Qala ka mekhoa ea setso le ea bioloji; sebelisa lik'hemik'hale feela joalo ka mohato oa ho qetela."
+    },
+    "weather_monitoring": {
+      "en": "Monitor LMS (Lesotho Meteorological Services) agrometeorological bulletins regularly. Pest outbreaks often correlate with specific weather patterns - warm, wet periods favor Fall Armyworm and fungal diseases; dry spells favor aphids.",
+      "st": "Sheba litataiso tsa LMS (Lesotho Meteorological Services) ka mehla. Merusu ea likokonyana hangata e tšoanela le maemo a leaera - nako e futhumetseng le e nang le pula e khetha Fall Armyworm le makulane a bioloji; nako e omileng e khetha likhele."
+    }
+  }
+}
