@@ -1,195 +1,153 @@
-import axios from 'axios';
+// src/services/api.js
+// Centralised API client for all Mosupisi microservices.
+// All base URLs come from api.config.js — change ports there, not here.
 
-// Base API configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+import { WEATHER_SERVICE_URL, CHAT_SERVICE_URL, PLANTING_SERVICE_URL } from '../config/api.config';
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('mosupisi_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+async function handleResponse(res) {
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`HTTP ${res.status}: ${text}`);
   }
-);
+  return res.json();
+}
 
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('mosupisi_token');
-      localStorage.removeItem('mosupisi_user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+function jsonPost(url, body) {
+  return fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  }).then(handleResponse);
+}
 
-// API service functions
-export const apiService = {
-  // Auth endpoints
-  auth: {
-    login: (mobile, password) => 
-      api.post('/api/auth/login', { mobile, password }),
-    
-    register: (userData) => 
-      api.post('/api/auth/register', userData),
-    
-    logout: () => 
-      api.post('/api/auth/logout'),
-    
-    verifyToken: () => 
-      api.get('/api/auth/verify'),
-  },
+function jsonGet(url, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return fetch(qs ? `${url}?${qs}` : url).then(handleResponse);
+}
 
-  // Query endpoints
-  query: {
-    send: (question, language) => 
-      api.post('/api/query', { question, language }),
-    
-    getHistory: (limit = 20) => 
-      api.get(`/api/query/history?limit=${limit}`),
-    
-    getById: (id) => 
-      api.get(`/api/query/${id}`),
-  },
+// ---------------------------------------------------------------------------
+// Chat Service  (Node.js — :3002)
+// ---------------------------------------------------------------------------
 
-  // Weather endpoints
-  weather: {
-    getCurrent: () => 
-      api.get('/api/weather/current'),
-    
-    getForecast: (days = 7) => 
-      api.get(`/api/weather/forecast?days=${days}`),
-    
-    getAlerts: () => 
-      api.get('/api/weather/alerts'),
-  },
+export const chatApi = {
+  sendMessage: (message, conversationId, userId) =>
+    jsonPost(`${CHAT_SERVICE_URL}/chat`, { message, conversationId, userId }),
 
-  // Profile endpoints
-  profile: {
-    get: () => 
-      api.get('/api/profile'),
-    
-    update: (data) => 
-      api.put('/api/profile', data),
-    
-    getCrops: () => 
-      api.get('/api/profile/crops'),
-  },
+  getHistory: (conversationId) =>
+    jsonGet(`${CHAT_SERVICE_URL}/chat/history/${conversationId}`),
 
-  // Knowledge base endpoints
-  knowledge: {
-    search: (query, crop) => 
-      api.get(`/api/knowledge/search?q=${query}&crop=${crop || ''}`),
-    
-    getByCrop: (crop) => 
-      api.get(`/api/knowledge/crop/${crop}`),
-    
-    getBulletins: () => 
-      api.get('/api/knowledge/bulletins'),
-  },
+  healthCheck: () =>
+    jsonGet(`${CHAT_SERVICE_URL}/health`),
 };
 
-// Mock API for development (when backend is not ready)
-export const mockApi = {
-  // Simulate API delay
-  delay: (ms = 1000) => new Promise(resolve => setTimeout(resolve, ms)),
+// ---------------------------------------------------------------------------
+// Planting Guide Service  (FastAPI — :3001)
+// ---------------------------------------------------------------------------
 
-  // Mock implementations
-  auth: {
-    login: async (mobile, password) => {
-      await mockApi.delay();
-      if (mobile === '266-1234-5678') {
-        return {
-          data: {
-            success: true,
-            token: 'mock-token-12345',
-            user: {
-              id: 1,
-              name: 'Ntate Thabo',
-              mobile: '266-1234-5678',
-              region: 'Maseru',
-              crops: ['maize', 'sorghum'],
-              language: 'en'
-            }
-          }
-        };
-      }
-      throw new Error('Invalid credentials');
-    },
-    
-    register: async (userData) => {
-      await mockApi.delay();
-      return {
-        data: {
-          success: true,
-          token: 'mock-token-12345',
-          user: { id: Date.now(), ...userData }
-        }
-      };
-    },
-  },
+export const plantingApi = {
+  getPlantingGuide: (crop, region) =>
+    jsonGet(`${PLANTING_SERVICE_URL}/plantings`, { crop, region }),
 
-  query: {
-    send: async (question, language) => {
-      await mockApi.delay(1500);
-      const responses = {
-        en: {
-          maize: "Plant maize in October-November when rains start. Use certified seeds and apply fertilizer.",
-          sorghum: "Sorghum does well in dry areas. Plant in November-December.",
-          default: "Thank you for your question. Based on agricultural guidelines for Lesotho, I recommend consulting your local extension officer for specific advice."
-        },
-        st: {
-          maize: "Jala poone ka Mphalane-Pulungoana ha lipula li qala. Sebelisa peo e netefalitsoeng le manyolo.",
-          sorghum: "Mabele a hantle libakeng tse omileng. Jala ka Pulungoana-Tšitoe.",
-          default: "Kea leboha potso ea hau. Ho latela tataiso ea temo Lesotho, ke khothaletsa ho buisana le ofisiri ea temo sebakeng sa heno."
-        }
-      };
-
-      const crop = question.toLowerCase().includes('maize') ? 'maize' : 
-                   question.toLowerCase().includes('sorghum') ? 'sorghum' : 'default';
-      
-      return {
-        data: {
-          answer: responses[language][crop] || responses[language].default,
-          sources: ['Lesotho Agricultural Guide 2025', 'Ministry of Agriculture'],
-          timestamp: new Date().toISOString()
-        }
-      };
-    },
-  },
-
-  weather: {
-    getForecast: async () => {
-      await mockApi.delay();
-      return {
-        data: {
-          forecast: [
-            { date: new Date().toISOString().split('T')[0], temp: { min: 15, max: 28 }, rainChance: 20, condition: 'sunny' },
-            { date: new Date(Date.now() + 86400000).toISOString().split('T')[0], temp: { min: 14, max: 26 }, rainChance: 60, condition: 'rainy' },
-          ]
-        }
-      };
-    },
-  },
+  getAllCrops: () =>
+    jsonGet(`${PLANTING_SERVICE_URL}/plantings`),
 };
 
-// Choose which API to use based on environment
-export const activeApi = process.env.REACT_APP_USE_MOCK === 'true' ? mockApi : apiService;
+// ---------------------------------------------------------------------------
+// Weather Service  (FastAPI — :8002)
+// ---------------------------------------------------------------------------
 
+export const weatherApi = {
+  /**
+   * GET current conditions for a lat/lon.
+   */
+  getCurrent: (latitude, longitude, locationName = null) =>
+    jsonPost(`${WEATHER_SERVICE_URL}/api/weather/current`, {
+      latitude,
+      longitude,
+      ...(locationName && { location_name: locationName }),
+    }),
+
+  /**
+   * GET multi-day forecast for a lat/lon.
+   */
+  getForecast: (latitude, longitude, days = 7, locationName = null) =>
+    jsonPost(`${WEATHER_SERVICE_URL}/api/weather/forecast`, {
+      latitude,
+      longitude,
+      days,
+      ...(locationName && { location_name: locationName }),
+    }),
+
+  /**
+   * GET Maseru 7-day forecast — no body required (dev helper).
+   */
+  getMaserForecast: (days = 7) =>
+    jsonGet(`${WEATHER_SERVICE_URL}/api/weather/forecast/maseru`, { days }),
+
+  /**
+   * GET NASA POWER agrometeorological summary for a date range.
+   */
+  getAgroClimate: (latitude, longitude, startDate, endDate) =>
+    jsonPost(`${WEATHER_SERVICE_URL}/api/weather/agro-climate`, {
+      latitude,
+      longitude,
+      start_date: startDate,
+      end_date:   endDate,
+    }),
+
+  /**
+   * Evaluate current conditions for alerts.
+   */
+  evaluateCurrentAlerts: (currentWeather, farmerId = null) => {
+    const params = farmerId ? `?farmer_id=${farmerId}` : '';
+    return fetch(`${WEATHER_SERVICE_URL}/api/alerts/evaluate/current${params}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(currentWeather),
+    }).then(handleResponse);
+  },
+
+  /**
+   * Evaluate a forecast for upcoming alerts.
+   */
+  evaluateForecastAlerts: (forecast, farmerId = null) => {
+    const params = farmerId ? `?farmer_id=${farmerId}` : '';
+    return fetch(`${WEATHER_SERVICE_URL}/api/alerts/evaluate/forecast${params}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(forecast),
+    }).then(handleResponse);
+  },
+
+  /**
+   * GET stored alert history from SQLite.
+   */
+  getAlertHistory: (farmerId = null, limit = 50) =>
+    jsonGet(`${WEATHER_SERVICE_URL}/api/alerts/history`, {
+      ...(farmerId && { farmer_id: farmerId }),
+      limit,
+    }),
+
+  /**
+   * GET status of all configured weather data sources.
+   */
+  getSourcesStatus: () =>
+    jsonGet(`${WEATHER_SERVICE_URL}/api/sources/status`),
+
+  /**
+   * GET weather service health.
+   */
+  healthCheck: () =>
+    jsonGet(`${WEATHER_SERVICE_URL}/health`),
+};
+
+// ---------------------------------------------------------------------------
+// Default export
+// ---------------------------------------------------------------------------
+
+const api = { chat: chatApi, planting: plantingApi, weather: weatherApi };
 export default api;
