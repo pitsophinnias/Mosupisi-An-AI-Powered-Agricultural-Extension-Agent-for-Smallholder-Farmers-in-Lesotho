@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 from database import get_db, PestReportDB
+from schemas import PestReportResponse   
 from schemas import PestReportCreate, PestReportUpdate
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])

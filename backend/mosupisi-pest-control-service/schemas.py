@@ -65,6 +65,21 @@ class PestReportCreate(BaseModel):
     action_taken: str
     notes: Optional[str] = ""
 
+class PestReportResponse(BaseModel):
+    id: int
+    user_id: str
+    pest_id: str
+    crop_type: str
+    severity: str
+    location: str
+    notes: Optional[str] = None
+    photo_url: Optional[str] = None
+    reported_at: datetime
+    status: str = "new"
+    officer_notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 class PestReportUpdate(BaseModel):
     status: Optional[str] = None

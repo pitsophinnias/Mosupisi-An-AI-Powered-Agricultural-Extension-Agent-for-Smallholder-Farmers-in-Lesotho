@@ -1,7 +1,24 @@
 // services/pestControlService.js
-// Connects the frontend to the mosupisi-pest-control-service (port 8002)
+// Matches the routes in mosupisi-pest-control-service/routes/pests.py
+//
+// Library routes (prefix /api/pests):
+//   GET  /api/pests/              all pests  (?crop=maize to filter)
+//   GET  /api/pests/crops         unique crop list
+//   GET  /api/pests/tips          general prevention tips
+//   GET  /api/pests/library/{id}  single pest by ID
+//
+// Report routes (prefix /api/pests):
+//   POST   /api/pests/reports              create report
+//   GET    /api/pests/reports/user/{id}    user's reports
+//   GET    /api/pests/reports/stats/summary stats
+//   GET    /api/pests/reports/{id}         single report
+//   PATCH  /api/pests/reports/{id}         update report
+//   DELETE /api/pests/reports/{id}         delete report
+//
+// Q&A:
+//   POST /api/ask/   RAG-powered Q&A
 
-const BASE_URL = process.env.REACT_APP_PEST_CONTROL_SERVICE_URL || 'http://localhost:8002';
+const BASE_URL = process.env.REACT_APP_PEST_CONTROL_SERVICE_URL || 'http://localhost:8001';
 
 const handleResponse = async (res) => {
   if (!res.ok) {
@@ -11,18 +28,15 @@ const handleResponse = async (res) => {
   return res.json();
 };
 
-// ─── Pest Library ────────────────────────────────────────────────────────────
+// ─── Pest Library ─────────────────────────────────────────────────────────────
 
-export const fetchPests = async ({ crop = null, severity = null } = {}) => {
-  const params = new URLSearchParams();
-  if (crop) params.append('crop', crop);
-  if (severity) params.append('severity', severity);
-  const query = params.toString() ? `?${params}` : '';
+export const fetchPests = async ({ crop = null } = {}) => {
+  const query = crop ? `?crop=${encodeURIComponent(crop)}` : '';
   return handleResponse(await fetch(`${BASE_URL}/api/pests/${query}`));
 };
 
 export const fetchPestById = async (pestId) => {
-  return handleResponse(await fetch(`${BASE_URL}/api/pests/${pestId}`));
+  return handleResponse(await fetch(`${BASE_URL}/api/pests/library/${pestId}`));
 };
 
 export const fetchCrops = async () => {
@@ -37,47 +51,51 @@ export const fetchGeneralTips = async () => {
 
 export const createPestReport = async (report) => {
   return handleResponse(
-    await fetch(`${BASE_URL}/api/reports/`, {
-      method: 'POST',
+    await fetch(`${BASE_URL}/api/pests/reports`, {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(report),
+      body:    JSON.stringify(report),
     })
   );
 };
 
 export const fetchUserReports = async (userId, status = null) => {
   const params = status ? `?status=${status}` : '';
-  return handleResponse(await fetch(`${BASE_URL}/api/reports/user/${userId}${params}`));
+  return handleResponse(
+    await fetch(`${BASE_URL}/api/pests/reports/user/${userId}${params}`)
+  );
 };
 
 export const updatePestReport = async (reportId, updates) => {
   return handleResponse(
-    await fetch(`${BASE_URL}/api/reports/${reportId}`, {
-      method: 'PATCH',
+    await fetch(`${BASE_URL}/api/pests/reports/${reportId}`, {
+      method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+      body:    JSON.stringify(updates),
     })
   );
 };
 
 export const deletePestReport = async (reportId) => {
   return handleResponse(
-    await fetch(`${BASE_URL}/api/reports/${reportId}`, { method: 'DELETE' })
+    await fetch(`${BASE_URL}/api/pests/reports/${reportId}`, { method: 'DELETE' })
   );
 };
 
 export const fetchReportStats = async () => {
-  return handleResponse(await fetch(`${BASE_URL}/api/reports/stats/summary`));
+  return handleResponse(
+    await fetch(`${BASE_URL}/api/pests/reports/stats/summary`)
+  );
 };
 
-// ─── Ask / Q&A ───────────────────────────────────────────────────────────────
+// ─── Ask / Q&A ────────────────────────────────────────────────────────────────
 
 export const askPestQuestion = async ({ question, language = 'en', crop = null }) => {
   return handleResponse(
     await fetch(`${BASE_URL}/api/ask/`, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, language, crop }),
+      body:    JSON.stringify({ question, language, crop }),
     })
   );
 };
