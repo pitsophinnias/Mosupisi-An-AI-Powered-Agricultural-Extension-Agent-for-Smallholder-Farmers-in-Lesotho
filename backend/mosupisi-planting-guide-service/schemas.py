@@ -1,6 +1,5 @@
 # schemas.py
-# Mosupisi PlantingGuide Microservice – Pydantic v2 Schemas
-# All date fields are ISO strings (YYYY-MM-DD) for seamless JSON ↔ Dexie sync.
+# Mosupisi PlantingGuide Microservice — Pydantic v2 Schemas
 
 from __future__ import annotations
 from typing import Optional, List, Any, Dict
@@ -35,7 +34,6 @@ class PlantingCreate(PlantingBase):
 
 
 class PlantingUpdate(BaseModel):
-    """Used for PATCH-style updates (action logging, status changes)."""
     status:         Optional[str] = None
     growthStage:    Optional[str] = None
     lastAction:     Optional[str] = None
@@ -50,14 +48,12 @@ class PlantingUpdate(BaseModel):
 
 
 class PlantingOut(PlantingBase):
-    """Full planting record returned to the React frontend, including computed fields."""
-    id:                 int
-    createdAt:          Optional[datetime] = None
-    updatedAt:          Optional[datetime] = None
-    # Computed server-side
-    progressPercent:    float = 0.0
-    currentStage:       str   = "unknown"
-    daysSincePlanting:  int   = 0
+    id:                int
+    createdAt:         Optional[datetime] = None
+    updatedAt:         Optional[datetime] = None
+    progressPercent:   float = 0.0
+    currentStage:      str   = "unknown"
+    daysSincePlanting: int   = 0
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -67,8 +63,21 @@ class PlantingOut(PlantingBase):
 # ---------------------------------------------------------------------------
 
 class ActionRequest(BaseModel):
-    action:    str  = Field(..., description="Description of the farm activity")
-    language:  str  = Field(default="en", description="en | st")
+    action:   str = Field(..., description="Description of the farm activity")
+    language: str = Field(default="en", description="en | st")
+
+
+class ActionLogOut(BaseModel):
+    """A single action log entry returned to the frontend."""
+    id:         int
+    planting_id: int
+    action:     str
+    advice_en:  Optional[str] = None
+    advice_st:  Optional[str] = None
+    language:   str = "en"
+    logged_at:  Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -78,15 +87,23 @@ class ActionRequest(BaseModel):
 class AdviceRequest(BaseModel):
     language:    str             = Field(default="en", description="en | st")
     userContext: Dict[str, Any]  = Field(default_factory=dict)
+    weatherContext: Optional[Dict[str, Any]] = None
 
 
 class AdviceResponse(BaseModel):
-    advice_en:              str
-    advice_st:              str
-    weather_outlook_en:     str
-    weather_outlook_st:     str
+    advice_en:               str
+    advice_st:               str
+    weather_outlook_en:      str
+    weather_outlook_st:      str
     rotation_recommendation: Dict[str, Any]
-    sources:                List[str]
+    sources:                 List[str]
+
+
+class ActionAdviceResponse(BaseModel):
+    """Advice generated directly from a logged action."""
+    advice_en: str
+    advice_st: str
+    sources:   List[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +124,7 @@ class CropRotationResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Weather context (extracted from Agromet Bulletin)
+# Weather context
 # ---------------------------------------------------------------------------
 
 class WeatherContextResponse(BaseModel):
@@ -133,8 +150,8 @@ class WeatherContextResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class SyncRequest(BaseModel):
-    plantings:          List[Dict[str, Any]] = Field(default_factory=list)
-    lastSyncTimestamp:  Optional[str]        = None
+    plantings:         List[Dict[str, Any]] = Field(default_factory=list)
+    lastSyncTimestamp: Optional[str]        = None
 
 
 class SyncResponse(BaseModel):

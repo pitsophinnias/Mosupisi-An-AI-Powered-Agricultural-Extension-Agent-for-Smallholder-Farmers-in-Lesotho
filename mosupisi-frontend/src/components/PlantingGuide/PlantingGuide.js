@@ -38,6 +38,7 @@ import {
   Spa as SeedlingIcon,
   LightbulbOutlined as AdviceIcon,
   WbSunny as WeatherIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -107,8 +108,15 @@ const PlantingGuide = () => {
   const [newPlanting,         setNewPlanting]         = useState({
     crop: '', plantingDate: format(new Date(), 'yyyy-MM-dd'), area: '', location: '',
   });
-  const [liveWeather,  setLiveWeather]  = useState(null);
-  const [liveForecast, setLiveForecast] = useState(null);
+  const [liveWeather,    setLiveWeather]    = useState(null);
+  const [liveForecast,   setLiveForecast]   = useState(null);
+  const [actionLogs,     setActionLogs]     = useState([]);
+  const [actionAdvice,   setActionAdvice]   = useState(null);
+  const [actionLoading,  setActionLoading]  = useState(false);
+  // Maps planting.id → { en, st } for the latest advice shown on the card
+  const [latestAdviceMap, setLatestAdviceMap] = useState({});
+  // History dialog — separate from Log Activity
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
 
   // Fetch weather on mount
   useEffect(() => {
@@ -240,6 +248,8 @@ const PlantingGuide = () => {
 
   const handleAddAction = async () => {
     if (!actionText.trim() || !selectedPlanting) return;
+    setActionLoading(true);
+    setActionAdvice(null);
 
     if (navigator.onLine) {
       try {
@@ -247,6 +257,22 @@ const PlantingGuide = () => {
         setPlantings((prev) => prev.map((p) => (p.id === data.id ? data : p)));
         await dbUtils.savePlanting(data);
         showSnackbar(language === 'en' ? 'Activity logged!' : 'Ketso e ngoliloe!');
+
+        // Fetch the advice generated for this action
+        try {
+          const logsRes = await api.get(`/plantings/${selectedPlanting.id}/actions`);
+          const logs = logsRes.data || [];
+          setActionLogs(logs);
+          if (logs.length > 0) {
+            const latest = logs[0];
+            const advice = { en: latest.advice_en, st: latest.advice_st };
+            setActionAdvice(advice);
+            // Save to card map so it shows on the card immediately
+            setLatestAdviceMap((prev) => ({ ...prev, [selectedPlanting.id]: advice }));
+          }
+        } catch (logErr) {
+          console.warn('Could not fetch action logs:', logErr);
+        }
       } catch (err) {
         console.error('Log action error:', err);
         const updated = { ...selectedPlanting, lastAction: actionText, lastActionDate: format(new Date(), 'yyyy-MM-dd'), notes: actionText, updatedAt: new Date().toISOString() };
@@ -262,7 +288,30 @@ const PlantingGuide = () => {
       await dbUtils.addToSyncQueue('LOG_ACTION', { id: selectedPlanting.id, action: actionText });
     }
     setActionText('');
-    setOpenActionDialog(false);
+    setActionLoading(false);
+    // Keep dialog open so user sees the advice
+  };
+
+  const handleOpenActionDialog = (planting) => {
+    // Simple open — no history loading here (history is in separate dialog)
+    setSelectedPlanting(planting);
+    setActionAdvice(null);
+    setActionText('');
+    setOpenActionDialog(true);
+  };
+
+  const handleOpenHistoryDialog = async (planting) => {
+    setSelectedPlanting(planting);
+    setActionLogs([]);
+    setOpenHistoryDialog(true);
+    if (navigator.onLine) {
+      try {
+        const res = await api.get(`/plantings/${planting.id}/actions`);
+        setActionLogs(res.data || []);
+      } catch (err) {
+        console.warn('Could not load action history:', err);
+      }
+    }
   };
 
   const handleAskQuestion = () => {
@@ -328,8 +377,11 @@ const PlantingGuide = () => {
           subheader={`${language === 'en' ? 'Planted' : 'E jalwe'}: ${formatDate(planting.plantingDate)} | ${language === 'en' ? 'Area' : 'Sebaka'}: ${planting.area}`}
           action={
             <Box>
-              <IconButton onClick={() => { setSelectedPlanting(planting); setOpenActionDialog(true); }} sx={{ color: theme.palette.primary.main }} title={language === 'en' ? 'Log activity' : 'Ngola ketso'}>
+              <IconButton onClick={() => handleOpenActionDialog(planting)} sx={{ color: theme.palette.primary.main }} title={language === 'en' ? 'Log activity' : 'Ngola ketso'}>
                 <EditIcon />
+              </IconButton>
+              <IconButton onClick={() => handleOpenHistoryDialog(planting)} sx={{ color: theme.palette.primary.main }} title={language === 'en' ? 'View history' : 'Bona histori'}>
+                <HistoryIcon />
               </IconButton>
               <IconButton onClick={() => handleGetAdvice(planting)} sx={{ color: theme.palette.primary.main }} title={language === 'en' ? 'Get AI advice' : 'Fumana keletso ea AI'}>
                 <AdviceIcon />
@@ -367,6 +419,18 @@ const PlantingGuide = () => {
               <Typography variant="body2">{planting.notes}</Typography>
             </Grid>
           </Grid>
+
+          {/* Latest advice — shown after logging an activity */}
+          {latestAdviceMap[planting.id] && (
+            <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 2 }}>
+              <Typography variant="caption" fontWeight={700} color="success.main" display="block" sx={{ mb: 0.5 }}>
+                💡 {language === 'en' ? 'Latest advice:' : 'Keletso ea morao-rao:'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                {language === 'en' ? latestAdviceMap[planting.id].en : latestAdviceMap[planting.id].st}
+              </Typography>
+            </Box>
+          )}
           {planting.status === 'harvested' && (
             <Box sx={{ mt: 2, p: 2, bgcolor: theme.palette.success.light, borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom sx={{ color: 'white' }}>
@@ -495,17 +559,97 @@ const PlantingGuide = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Log Activity Dialog */}
-      <Dialog open={openActionDialog} onClose={() => setOpenActionDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{language === 'en' ? 'Log Activity' : 'Ngola Ketso'}</DialogTitle>
+      {/* Log Activity Dialog — clean input + advice only */}
+      <Dialog open={openActionDialog} onClose={() => { setOpenActionDialog(false); setActionAdvice(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {language === 'en' ? 'Log Activity' : 'Ngola Ketso'}
+          {selectedPlanting && (
+            <Typography variant="caption" display="block" color="textSecondary">
+              {t ? t(selectedPlanting.crop) : selectedPlanting.crop} — {selectedPlanting.location}
+            </Typography>
+          )}
+        </DialogTitle>
         <DialogContent>
-          <TextField fullWidth multiline rows={4} label={language === 'en' ? 'What did you do?' : 'U entseng?'}
-            value={actionText} onChange={(e) => setActionText(e.target.value)} sx={{ mt: 2 }}
-            placeholder={language === 'en' ? 'e.g., Watered, applied fertilizer, weeded...' : 'mohlala, Ke noselitse, ke sebelisitse manyolo, ke lehile...'} />
+          <TextField fullWidth multiline rows={3} label={language === 'en' ? 'What did you do?' : 'U entseng?'}
+            value={actionText} onChange={(e) => setActionText(e.target.value)} sx={{ mt: 2, mb: 2 }}
+            placeholder={language === 'en' ? 'e.g., Watered, applied fertilizer, weeded...' : 'mohlala, Ke noselitse, ke sebelisitse manyolo, ke lehile...'}
+            disabled={actionLoading} />
+
+          {actionLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="textSecondary">
+                {language === 'en' ? 'Generating advice…' : 'E hlahisa keletso…'}
+              </Typography>
+            </Box>
+          )}
+
+          {actionAdvice && (
+            <Alert severity="success">
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                💡 {language === 'en' ? 'Recommended next steps:' : 'Mehato e latelang:'}
+              </Typography>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {language === 'en' ? actionAdvice.en : actionAdvice.st}
+              </Typography>
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenActionDialog(false)} sx={{ minHeight: 44 }}>{language === 'en' ? 'Cancel' : 'Hlakola'}</Button>
-          <Button onClick={handleAddAction} variant="contained" sx={{ minHeight: 44 }}>{language === 'en' ? 'Save' : 'Boloka'}</Button>
+          <Button onClick={() => { setOpenActionDialog(false); setActionAdvice(null); }} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Close' : 'Koala'}
+          </Button>
+          <Button onClick={handleAddAction} variant="contained" sx={{ minHeight: 44 }}
+            disabled={actionLoading || !actionText.trim()}>
+            {actionLoading ? <CircularProgress size={20} /> : (language === 'en' ? 'Log & Get Advice' : 'Ngola le Fumana Keletso')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Activity History Dialog — opened separately via History icon */}
+      <Dialog open={openHistoryDialog} onClose={() => setOpenHistoryDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {language === 'en' ? 'Activity History' : 'Histori ea Liketso'}
+          {selectedPlanting && (
+            <Typography variant="caption" display="block" color="textSecondary">
+              {t ? t(selectedPlanting.crop) : selectedPlanting.crop} — {selectedPlanting.location}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {actionLogs.length === 0 ? (
+            <Typography color="textSecondary" sx={{ py: 3, textAlign: 'center' }}>
+              {language === 'en' ? 'No activities logged yet.' : 'Ha ho liketso tse ngolisitsoeng.'}
+            </Typography>
+          ) : (
+            <Box sx={{ maxHeight: 420, overflowY: 'auto' }}>
+              {actionLogs.map((log) => (
+                <Box key={log.id} sx={{ mb: 2, p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="body2" fontWeight={600}>{log.action}</Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      {log.logged_at ? new Date(log.logged_at).toLocaleDateString('en-LS', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                    </Typography>
+                  </Box>
+                  {(log.advice_en || log.advice_st) && (
+                    <Box sx={{ mt: 0.75, p: 1, bgcolor: '#f0fdf4', borderRadius: 1, border: '1px solid #bbf7d0' }}>
+                      <Typography variant="caption" color="success.main" fontWeight={600} display="block" sx={{ mb: 0.25 }}>
+                        💡 {language === 'en' ? 'Advice given:' : 'Keletso e fanoeng:'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                        {language === 'en' ? log.advice_en : log.advice_st}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenHistoryDialog(false)} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Close' : 'Koala'}
+          </Button>
         </DialogActions>
       </Dialog>
 

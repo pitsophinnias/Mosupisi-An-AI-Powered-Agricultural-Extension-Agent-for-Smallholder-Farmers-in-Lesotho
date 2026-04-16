@@ -44,6 +44,9 @@ import {
   Done as DoneIcon,
   InfoOutlined as InfoIcon,
   WbSunny as WeatherIcon,
+  Edit as EditIcon,
+  History as HistoryIcon,
+  Restore as RestoreIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -147,7 +150,7 @@ const SprayWindowBanner = ({ forecast, language }) => {
 };
 
 // ── PestCard ───────────────────────────────────────────────────────────────
-const PestCard = ({ pest, language, onAsk }) => {
+const PestCard = ({ pest, language, onAsk, onReport }) => {
   const theme = useTheme();
   const severityColor = getSeverityColor(pest.severity, theme);
   const treatment = pest.treatment || {};
@@ -291,9 +294,15 @@ const PestCard = ({ pest, language, onAsk }) => {
           </Alert>
         )}
 
-        <Button size="small" variant="outlined" fullWidth onClick={() => onAsk(pest)}>
-          {language === 'en' ? `Ask about ${pest.name}` : `Botsa ka ${pest.name_st}`}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+          <Button size="small" variant="outlined" fullWidth onClick={() => onAsk(pest)}>
+            {language === 'en' ? `Ask about ${pest.name}` : `Botsa ka ${pest.name_st}`}
+          </Button>
+          <Button size="small" variant="contained" color="error" fullWidth onClick={() => onReport(pest)}
+            startIcon={<AddIcon />}>
+            {language === 'en' ? 'Report' : 'Tlaleha'}
+          </Button>
+        </Box>
       </CardContent>
     </Card>
   );
@@ -332,7 +341,18 @@ const PestControl = () => {
   // for weather (it loads silently). The setter is used to update internal state.
   const [sprayForecast, setSprayForecast] = useState(null);
   const [weatherAlerts, setWeatherAlerts] = useState([]);
-  const [, setWeatherLoading]             = useState(false); // setter only — no UI for this
+  const [, setWeatherLoading]             = useState(false);
+
+  // Action log state for pest reports
+  const [openPestActionDialog,  setOpenPestActionDialog]  = useState(false);
+  const [openPestHistoryDialog, setOpenPestHistoryDialog] = useState(false);
+  const [selectedReport,        setSelectedReport]        = useState(null);
+  const [pestActionText,        setPestActionText]        = useState('');
+  const [pestActionLogs,        setPestActionLogs]        = useState([]);
+  const [pestActionAdvice,      setPestActionAdvice]      = useState(null);
+  const [pestActionLoading,     setPestActionLoading]     = useState(false);
+  // Persists latest advice per report so it shows on the card after dialog closes
+  const [pestLatestAdviceMap,   setPestLatestAdviceMap]   = useState({});
 
   useEffect(() => {
     const lat = user?.farm_lat || -29.3167;
@@ -402,6 +422,20 @@ const PestControl = () => {
     setOpenAskDialog(true);
   };
 
+  // Open the Report dialog pre-filled with the pest's name and severity
+  const handleOpenReportFromPest = (pest) => {
+    setNewReport({
+      crop:          pest.crops?.[0] || '',
+      pest_name:     pest.name,
+      date_observed: format(new Date(), 'yyyy-MM-dd'),
+      location:      '',
+      severity:      pest.severity || 'medium',
+      action_taken:  '',
+      notes:         '',
+    });
+    setOpenReportDialog(true);
+  };
+
   const handleAskQuestion = async () => {
     if (!questionText.trim()) return;
     setAskLoading(true);
@@ -424,7 +458,20 @@ const PestControl = () => {
   const handleAddReport = async () => {
     if (!newReport.crop || !newReport.pest_name || !newReport.location) return;
     try {
-      await createPestReport({ ...newReport, user_id: user?.id || 'anonymous' });
+      // Build payload that matches PestReportCreate schema exactly:
+      //   user_id, crop, pest_name, date_observed (YYYY-MM-DD), location,
+      //   severity, action_taken (required string), notes (optional)
+      const payload = {
+        user_id:       user?.id ? String(user.id) : 'anonymous',
+        crop:          newReport.crop,
+        pest_name:     newReport.pest_name,
+        date_observed: newReport.date_observed || format(new Date(), 'yyyy-MM-dd'),
+        location:      newReport.location,
+        severity:      newReport.severity || 'medium',
+        action_taken:  newReport.action_taken?.trim() || 'None recorded',
+        notes:         newReport.notes || '',
+      };
+      await createPestReport(payload);
       setOpenReportDialog(false);
       setNewReport({ crop: '', pest_name: '', date_observed: format(new Date(), 'yyyy-MM-dd'), location: '', severity: 'medium', action_taken: '', notes: '' });
       setSnackbar({ open: true, message: language === 'en' ? 'Report submitted!' : 'Tlaleho e rometsoe!', severity: 'success' });
@@ -444,6 +491,35 @@ const PestControl = () => {
     }
   };
 
+  const handleReopenReport = async (reportId) => {
+    try {
+      await updatePestReport(reportId, { status: 'monitoring' });
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status: 'monitoring' } : r)));
+      setSnackbar({ open: true, message: language === 'en' ? 'Report reopened — now monitoring' : 'Tlaleho e buletstoe — e hlahlojoa', severity: 'info' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' });
+    }
+  };
+
+  const handleChangeSeverity = async (reportId, newSeverity) => {
+    try {
+      await updatePestReport(reportId, { status: 'monitoring' }); // reopen if resolved
+      // Use fetch directly since updatePestReport schema supports severity via notes workaround
+      const BASE = process.env.REACT_APP_PEST_CONTROL_SERVICE_URL || 'http://localhost:8001';
+      await fetch(`${BASE}/api/pests/reports/${reportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ severity: newSeverity, status: 'monitoring' }),
+      });
+      setReports((prev) => prev.map((r) =>
+        r.id === reportId ? { ...r, severity: newSeverity, status: 'monitoring' } : r
+      ));
+      setSnackbar({ open: true, message: language === 'en' ? `Severity updated to ${newSeverity}` : `Boholo bo fetotsoe ho ${newSeverity}`, severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' });
+    }
+  };
+
   const handleDeleteReport = async (reportId) => {
     try {
       await deletePestReport(reportId);
@@ -451,6 +527,60 @@ const PestControl = () => {
       setSnackbar({ open: true, message: language === 'en' ? 'Report deleted' : 'Tlaleho e hlakotsoe', severity: 'info' });
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
+    }
+  };
+
+  const handleOpenPestActionDialog = (report) => {
+    // Clean open — no history loading here (history is in a separate dialog)
+    setSelectedReport(report);
+    setPestActionText('');
+    setPestActionAdvice(null);
+    setOpenPestActionDialog(true);
+  };
+
+  const handleOpenPestHistoryDialog = async (report) => {
+    setSelectedReport(report);
+    setPestActionLogs([]);
+    setOpenPestHistoryDialog(true);
+    try {
+      const BASE = process.env.REACT_APP_PEST_CONTROL_SERVICE_URL || 'http://localhost:8001';
+      const res = await fetch(`${BASE}/api/pests/reports/${report.id}/actions`);
+      if (res.ok) { const data = await res.json(); setPestActionLogs(data); }
+    } catch (err) { console.warn('Could not load pest action logs:', err); }
+  };
+
+  const handleLogPestAction = async () => {
+    if (!pestActionText.trim() || !selectedReport) return;
+    setPestActionLoading(true);
+    setPestActionAdvice(null);
+    try {
+      const BASE = process.env.REACT_APP_PEST_CONTROL_SERVICE_URL || 'http://localhost:8001';
+      const res = await fetch(`${BASE}/api/pests/reports/${selectedReport.id}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action:    pestActionText,
+          language:  language,
+          pest_name: selectedReport.pest_name,
+          crop:      selectedReport.crop,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const logEntry = await res.json();
+      const advice = { en: logEntry.advice_en, st: logEntry.advice_st };
+      setPestActionAdvice(advice);
+      // Save to map so advice persists on the card after dialog closes
+      setPestLatestAdviceMap((prev) => ({ ...prev, [selectedReport.id]: advice }));
+      // Update the report card's action_taken immediately so it shows the latest action
+      setReports((prev) => prev.map((r) =>
+        r.id === selectedReport.id ? { ...r, action_taken: pestActionText } : r
+      ));
+      setPestActionText('');
+      setSnackbar({ open: true, message: language === 'en' ? 'Action logged!' : 'Ketso e ngoliloe!', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' });
+    } finally {
+      setPestActionLoading(false);
     }
   };
 
@@ -534,7 +664,7 @@ const PestControl = () => {
             <Grid container spacing={2}>
               {pests.map((pest) => (
                 <Grid item xs={12} md={6} key={pest.id}>
-                  <PestCard pest={pest} language={language} onAsk={handleOpenAsk} />
+                  <PestCard pest={pest} language={language} onAsk={handleOpenAsk} onReport={handleOpenReportFromPest} />
                 </Grid>
               ))}
             </Grid>
@@ -577,10 +707,29 @@ const PestControl = () => {
                       <Chip
                         label={report.status === 'resolved' ? (language === 'en' ? 'Resolved' : 'E rarolotsoe') : (language === 'en' ? 'Monitoring' : 'E hlahlojoa')}
                         size="small" color={report.status === 'resolved' ? 'success' : 'warning'} />
-                      {report.status !== 'resolved' && (
+                      {/* Log Action button */}
+                      <Tooltip title={language === 'en' ? 'Log action & get advice' : 'Ngola ketso le fumana keletso'}>
+                        <IconButton size="small" color="primary" onClick={() => handleOpenPestActionDialog(report)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {/* History button */}
+                      <Tooltip title={language === 'en' ? 'View action history' : 'Bona histori ea liketso'}>
+                        <IconButton size="small" onClick={() => handleOpenPestHistoryDialog(report)}>
+                          <HistoryIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {/* Resolve / Reopen toggle */}
+                      {report.status !== 'resolved' ? (
                         <Tooltip title={language === 'en' ? 'Mark resolved' : 'Tibibatsa e rarolotsoe'}>
                           <IconButton size="small" color="success" onClick={() => handleResolveReport(report.id)}>
                             <DoneIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title={language === 'en' ? 'Pest returned — reopen' : 'Kokonyana e khutlile — bula hape'}>
+                          <IconButton size="small" color="warning" onClick={() => handleReopenReport(report.id)}>
+                            <RestoreIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       )}
@@ -591,19 +740,46 @@ const PestControl = () => {
                       </Tooltip>
                     </Box>
                   </Box>
-                  <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip label={getSeverityLabel(report.severity, language)} size="small"
-                      sx={{ bgcolor: getSeverityColor(report.severity, theme), color: 'white' }} />
+
+                  {/* Severity — clickable chips to change level */}
+                  <Box sx={{ mt: 1, display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Typography variant="caption" color="textSecondary" sx={{ mr: 0.5 }}>
+                      {language === 'en' ? 'Severity:' : 'Boholo:'}
+                    </Typography>
+                    {['low', 'medium', 'high'].map((level) => (
+                      <Chip
+                        key={level}
+                        label={getSeverityLabel(level, language)}
+                        size="small"
+                        onClick={() => report.severity !== level && handleChangeSeverity(report.id, level)}
+                        sx={{
+                          bgcolor:    report.severity === level ? getSeverityColor(level, theme) : 'transparent',
+                          color:      report.severity === level ? 'white' : getSeverityColor(level, theme),
+                          border:     `1px solid ${getSeverityColor(level, theme)}`,
+                          fontWeight: report.severity === level ? 700 : 400,
+                          cursor:     report.severity === level ? 'default' : 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      />
+                    ))}
                   </Box>
+
+                  {/* Latest action — updated in real time when logging */}
                   {report.action_taken && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      <strong>{language === 'en' ? 'Action: ' : 'Ketso: '}</strong>{report.action_taken}
+                      <strong>{language === 'en' ? 'Latest action: ' : 'Ketso ea morao-rao: '}</strong>{report.action_taken}
                     </Typography>
                   )}
-                  {report.notes && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      <strong>{language === 'en' ? 'Notes: ' : 'Lintlha: '}</strong>{report.notes}
-                    </Typography>
+                  {/* Latest advice — persists on card from pestLatestAdviceMap */}
+                  {pestLatestAdviceMap[report.id] && (
+                    <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 2 }}>
+                      <Typography variant="caption" fontWeight={700} color="success.main" display="block" sx={{ mb: 0.5 }}>
+                        💡 {language === 'en' ? 'Latest advice:' : 'Keletso ea morao-rao:'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                        {language === 'en' ? pestLatestAdviceMap[report.id].en : pestLatestAdviceMap[report.id].st}
+                      </Typography>
+                    </Box>
                   )}
                 </CardContent>
               </Card>
@@ -767,6 +943,113 @@ const PestControl = () => {
           </Button>
           <Button onClick={handleSendToChat} variant="contained" disabled={!questionText.trim()}>
             {language === 'en' ? 'Open in Chat' : 'Bula ka Chat'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Pest Action Log Dialog — input + advice only ─────────────────── */}
+      <Dialog open={openPestActionDialog} onClose={() => { setOpenPestActionDialog(false); setPestActionAdvice(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {language === 'en' ? '🐛 Log Pest Control Action' : '🐛 Ngola Ketso ea Taolo ea Likokonyana'}
+          {selectedReport && (
+            <Typography variant="caption" display="block" color="textSecondary">
+              {selectedReport.pest_name} — {selectedReport.crop} | {selectedReport.location}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth multiline rows={3}
+            label={language === 'en' ? 'What did you do?' : 'U entseng?'}
+            value={pestActionText}
+            onChange={(e) => setPestActionText(e.target.value)}
+            sx={{ mt: 2, mb: 2 }}
+            placeholder={language === 'en'
+              ? 'e.g., Applied neem spray, removed egg clusters, set traps...'
+              : 'mohlala, Ke fafalitse neem, ke tlohile litsoale, ke beile mekanyo...'}
+            disabled={pestActionLoading}
+          />
+
+          {pestActionLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="textSecondary">
+                {language === 'en' ? 'Generating advice…' : 'E hlahisa keletso…'}
+              </Typography>
+            </Box>
+          )}
+
+          {pestActionAdvice && (
+            <Alert severity="success">
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                💡 {language === 'en' ? 'Recommended next steps:' : 'Mehato e latelang:'}
+              </Typography>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {language === 'en' ? pestActionAdvice.en : pestActionAdvice.st}
+              </Typography>
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setOpenPestActionDialog(false); setPestActionAdvice(null); }}>
+            {language === 'en' ? 'Close' : 'Koala'}
+          </Button>
+          <Button onClick={handleLogPestAction} variant="contained"
+            disabled={pestActionLoading || !pestActionText.trim()}>
+            {pestActionLoading
+              ? <CircularProgress size={20} />
+              : (language === 'en' ? 'Log & Get Advice' : 'Ngola le Fumana Keletso')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Pest Action History Dialog ────────────────────────────────────── */}
+      <Dialog open={openPestHistoryDialog} onClose={() => setOpenPestHistoryDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {language === 'en' ? 'Action History' : 'Histori ea Liketso'}
+          {selectedReport && (
+            <Typography variant="caption" display="block" color="textSecondary">
+              {selectedReport.pest_name} — {selectedReport.crop} | {selectedReport.location}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {pestActionLogs.length === 0 ? (
+            <Typography color="textSecondary" sx={{ py: 3, textAlign: 'center' }}>
+              {language === 'en'
+                ? 'No actions logged yet. Use the ✏️ button to log actions and get advice.'
+                : 'Ha ho liketso tse ngolisitsoeng. Sebelisa konopo ea ✏️ ho ngola liketso.'}
+            </Typography>
+          ) : (
+            <Box sx={{ maxHeight: 440, overflowY: 'auto' }}>
+              {pestActionLogs.map((log) => (
+                <Box key={log.id} sx={{ mb: 2, p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="body2" fontWeight={600}>{log.action}</Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      {log.logged_at
+                        ? new Date(log.logged_at).toLocaleDateString('en-LS', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : ''}
+                    </Typography>
+                  </Box>
+                  {(log.advice_en || log.advice_st) && (
+                    <Box sx={{ mt: 0.75, p: 1, bgcolor: '#f0fdf4', borderRadius: 1, border: '1px solid #bbf7d0' }}>
+                      <Typography variant="caption" color="success.main" fontWeight={600} display="block" sx={{ mb: 0.25 }}>
+                        💡 {language === 'en' ? 'Advice given:' : 'Keletso e fanoeng:'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                        {language === 'en' ? log.advice_en : log.advice_st}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenPestHistoryDialog(false)} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Close' : 'Koala'}
           </Button>
         </DialogActions>
       </Dialog>
