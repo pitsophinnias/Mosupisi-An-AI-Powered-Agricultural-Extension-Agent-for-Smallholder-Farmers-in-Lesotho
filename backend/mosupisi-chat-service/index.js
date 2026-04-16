@@ -1,207 +1,183 @@
-// index.js - Full working version with aiService
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
+// index.js — Mosupisi Chat Service (Node gateway)
+//
+// Routes:
+//   GET  /api/health       — health check
+//   GET  /api/crops        — crop list from JS knowledge base
+//   GET  /api/crops/:crop  — crop detail
+//   POST /api/chat/ask     — forwarded to Python main.py (LLM + RAG)
+//
+// The chat endpoint is forwarded to the Python AI service (main.py)
+// running on PYTHON_AI_PORT (default 3003) which uses mosupisi-q4.gguf.
 
-// Load environment variables
+const express = require('express');
+const cors    = require('cors');
+const axios   = require('axios');
+const dotenv  = require('dotenv');
+
 dotenv.config();
 
-// Import your AI service
-const aiService = require('./services/aiService');
+const aiService    = require('./services/aiService');
+const app          = express();
+const PORT         = process.env.PORT         || 3002;
+const PYTHON_AI_URL = process.env.PYTHON_AI_URL || 'http://localhost:3003/api/chat';
 
-const app = express();
-const PORT = process.env.PORT || 3002;
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
 // Logging middleware
 app.use((req, res, next) => {
-  console.log(`\n📨 ${new Date().toISOString()} - ${req.method} ${req.path}`);
-  if (req.method === 'POST') {
-    console.log('   Body:', JSON.stringify(req.body, null, 2));
-  }
+  console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  if (req.method === 'POST') console.log('   Body:', JSON.stringify(req.body, null, 2));
   next();
 });
 
-// Root endpoint
+// ---------------------------------------------------------------------------
+// Root
+// ---------------------------------------------------------------------------
 app.get('/', (req, res) => {
   res.json({
     name: 'Mosupisi Chat Service',
-    version: '1.0.0',
-    status: 'running',
+    version: '2.0.0',
+    ai_backend: PYTHON_AI_URL,
     endpoints: {
-      health: 'GET /api/health',
-      crops: 'GET /api/crops',
+      health:     'GET /api/health',
+      crops:      'GET /api/crops',
       cropDetail: 'GET /api/crops/:crop',
-      chat: 'POST /api/chat/ask'
-    }
+      chat:       'POST /api/chat/ask',
+    },
   });
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    service: 'mosupisi-chat-service',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Get all crops
-app.get('/api/crops', (req, res) => {
-  console.log('✅ GET /api/crops - Fetching all crops');
-  
-  // Check if aiService is properly initialized
-  if (!aiService || !aiService.knowledgeBase || !aiService.knowledgeBase.crops) {
-    console.error('❌ aiService not properly initialized');
-    return res.status(500).json({ 
-      error: 'Service not properly initialized',
-      message: 'Knowledge base not available'
-    });
-  }
-  
-  const crops = Object.keys(aiService.knowledgeBase.crops);
-  console.log(`   Found crops: ${crops.join(', ')}`);
-  
-  res.json({
-    crops: crops,
-    details: aiService.knowledgeBase.crops
-  });
-});
-
-// Get specific crop
-app.get('/api/crops/:crop', (req, res) => {
-  const crop = req.params.crop;
-  console.log(`✅ GET /api/crops/${crop} - Fetching crop details`);
-  
-  if (!aiService || !aiService.knowledgeBase || !aiService.knowledgeBase.crops) {
-    return res.status(500).json({ 
-      error: 'Service not properly initialized',
-      message: 'Knowledge base not available'
-    });
-  }
-  
-  const cropData = aiService.knowledgeBase.crops[crop];
-  
-  if (!cropData) {
-    return res.status(404).json({ 
-      error: 'Crop not found',
-      message: `Crop '${crop}' not found`,
-      available: Object.keys(aiService.knowledgeBase.crops)
-    });
-  }
-
-  res.json(cropData);
-});
-
-// Chat endpoint
-app.post('/api/chat/ask', async (req, res) => {
+// ---------------------------------------------------------------------------
+// Health — check both Node and Python AI service
+// ---------------------------------------------------------------------------
+app.get('/api/health', async (req, res) => {
+  let aiStatus = 'unknown';
   try {
-    const { question, context = {}, language = 'en' } = req.body;
-    
-    console.log('✅ POST /api/chat/ask - Processing question:');
-    console.log(`   Question: "${question}"`);
-    console.log(`   Context:`, context);
-    console.log(`   Language: ${language}`);
+    const r = await axios.get(PYTHON_AI_URL.replace('/api/chat', '/health'), { timeout: 3000 });
+    aiStatus = r.data.status;
+  } catch {
+    aiStatus = 'unreachable';
+  }
 
-    // Validate input
-    if (!question || question.trim() === '') {
-      return res.status(400).json({ 
-        error: 'Question is required',
-        message: language === 'st' ? 'Potso ea hlokahala' : 'Question is required'
-      });
-    }
+  res.json({
+    status:    'healthy',
+    service:   'mosupisi-chat-service',
+    ai_status: aiStatus,
+    timestamp: new Date().toISOString(),
+  });
+});
 
-    // Check if aiService is available
-    if (!aiService || typeof aiService.getResponse !== 'function') {
-      console.error('❌ aiService.getResponse not available');
-      
-      // Fallback response
-      const crop = context.crop || 'maize';
-      const fallbackResponses = {
-        fertilizer: `For ${crop}, apply fertilizer at planting and 4-6 weeks after emergence.`,
-        water: `Water ${crop} during critical periods like flowering and grain filling.`,
-        pest: `Monitor ${crop} for common pests and diseases.`
-      };
-      
-      const q = question.toLowerCase();
-      let answer = '';
-      if (q.includes('fertilizer')) answer = fallbackResponses.fertilizer;
-      else if (q.includes('water')) answer = fallbackResponses.water;
-      else if (q.includes('pest')) answer = fallbackResponses.pest;
-      else answer = `I can help you with ${crop}. Please ask about fertilizer, water, or pests.`;
-      
-      return res.json({
-        answer: answer,
-        sources: ['Fallback Knowledge Base'],
-        timestamp: new Date().toISOString(),
-        warning: 'Using fallback response - aiService not available'
-      });
-    }
+// ---------------------------------------------------------------------------
+// Crops — served from JS knowledge base (fast, no LLM needed)
+// ---------------------------------------------------------------------------
+app.get('/api/crops', (req, res) => {
+  if (!aiService?.knowledgeBase?.crops) {
+    return res.status(500).json({ error: 'Knowledge base not available' });
+  }
+  res.json({
+    crops:   Object.keys(aiService.knowledgeBase.crops),
+    details: aiService.knowledgeBase.crops,
+  });
+});
 
-    // Get AI response using your service
-    const response = await aiService.getResponse(question, context, language);
-    
-    console.log('   ✅ Response generated successfully');
-    
-    res.json({
-      answer: response.answer,
-      sources: response.sources || ['Mosupisi Knowledge Base'],
-      timestamp: new Date().toISOString()
+app.get('/api/crops/:crop', (req, res) => {
+  if (!aiService?.knowledgeBase?.crops) {
+    return res.status(500).json({ error: 'Knowledge base not available' });
+  }
+  const data = aiService.knowledgeBase.crops[req.params.crop];
+  if (!data) {
+    return res.status(404).json({
+      error:     'Crop not found',
+      available: Object.keys(aiService.knowledgeBase.crops),
+    });
+  }
+  res.json(data);
+});
+
+// ---------------------------------------------------------------------------
+// Chat — forwarded to Python AI service (mosupisi-q4.gguf + RAG)
+// ---------------------------------------------------------------------------
+app.post('/api/chat/ask', async (req, res) => {
+  const { question, context = {}, language = 'en', weatherContext } = req.body;
+
+  if (!question?.trim()) {
+    return res.status(400).json({ error: 'Question is required' });
+  }
+
+  try {
+    console.log(`   Forwarding to Python AI: "${question.slice(0, 60)}..."`);
+
+    const payload = {
+      message:         question,
+      conversation_id: req.body.conversationId || null,
+      user_id:         req.body.userId || null,
+      system_note:     weatherContext || null,
+      language:        language,
+      context:         context,
+    };
+
+    const response = await axios.post(PYTHON_AI_URL, payload, {
+      timeout: 60000,  // 60s — LLM can be slow on first inference
+      headers: { 'Content-Type': 'application/json' },
     });
 
-  } catch (error) {
-    console.error('❌ Chat error:', error);
-    
-    // Provide a helpful error response
-    res.status(500).json({ 
-      error: 'Failed to process question',
-      message: 'An error occurred while processing your question.',
-      details: error.message,
-      fallback: 'Please try again or rephrase your question.'
+    const data = response.data;
+
+    res.json({
+      answer:    data.response || data.answer || '',
+      sources:   data.sources  || ['Mosupisi Agricultural Knowledge Base'],
+      timestamp: new Date().toISOString(),
+    });
+
+  } catch (err) {
+    console.error('Python AI error:', err.message);
+
+    // Fallback to JS knowledge base if Python AI is down
+    if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+      console.log('   Python AI unavailable — using JS fallback');
+      try {
+        const fallback = await aiService.getResponse(question, context, language);
+        return res.json({
+          answer:    fallback.answer,
+          sources:   fallback.sources || ['Mosupisi Knowledge Base (offline mode)'],
+          timestamp: new Date().toISOString(),
+          warning:   'Using offline fallback — AI model not available',
+        });
+      } catch (fbErr) {
+        console.error('Fallback also failed:', fbErr.message);
+      }
+    }
+
+    res.status(502).json({
+      error:   'AI service unavailable',
+      message: 'Could not get a response. Please try again.',
+      details: err.message,
     });
   }
 });
 
-// 404 handler
+// ---------------------------------------------------------------------------
+// 404 + error handlers
+// ---------------------------------------------------------------------------
 app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: `Cannot ${req.method} ${req.path}`,
-    available_endpoints: {
-      root: 'GET /',
-      health: 'GET /api/health',
-      crops: 'GET /api/crops',
-      crop_detail: 'GET /api/crops/:crop',
-      chat: 'POST /api/chat/ask'
-    }
-  });
+  res.status(404).json({ error: 'Not Found', path: req.path });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('❌ Unhandled error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: 'Something went wrong. Please try again later.'
-  });
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
 app.listen(PORT, () => {
   console.log('\n' + '='.repeat(60));
-  console.log('🚀 Mosupisi Chat Service - FULL VERSION');
+  console.log('  Mosupisi Chat Service v2.0');
   console.log('='.repeat(60));
-  console.log(`📡 Server: http://localhost:${PORT}`);
-  console.log(`🌱 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🤖 AI Service: ${aiService ? 'Loaded' : 'Failed to load'}`);
-  console.log('\n📋 Available Endpoints:');
-  console.log(`   🔹 GET  /`);
-  console.log(`   🔹 GET  /api/health`);
-  console.log(`   🔹 GET  /api/crops`);
-  console.log(`   🔹 GET  /api/crops/:crop`);
-  console.log(`   🔹 POST /api/chat/ask`);
+  console.log(`  Node gateway : http://localhost:${PORT}`);
+  console.log(`  Python AI    : ${PYTHON_AI_URL}`);
+  console.log('  Endpoints    : GET /api/health | /api/crops | POST /api/chat/ask');
   console.log('='.repeat(60) + '\n');
 });
