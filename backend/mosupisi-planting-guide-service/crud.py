@@ -1,6 +1,5 @@
 # crud.py
-# Mosupisi PlantingGuide Microservice – CRUD operations
-# All business logic for reading/writing plantings lives here so routes stay thin.
+# Mosupisi PlantingGuide Microservice — CRUD operations
 
 from __future__ import annotations
 from datetime import date, datetime
@@ -18,10 +17,6 @@ from growth import compute_progress, get_current_stage, days_since_planting
 # ---------------------------------------------------------------------------
 
 def _enrich(planting: models.Planting) -> models.Planting:
-    """
-    Attach computed fields (progressPercent, currentStage, daysSincePlanting)
-    to the ORM object so Pydantic can serialise them via PlantingOut.
-    """
     planting.progressPercent   = compute_progress(planting.crop, planting.plantingDate, planting.status)
     planting.currentStage      = get_current_stage(planting.crop, planting.plantingDate, planting.status)
     planting.daysSincePlanting = days_since_planting(planting.plantingDate)
@@ -44,11 +39,9 @@ def get_planting(db: Session, planting_id: int) -> Optional[models.Planting]:
 
 def create_planting(db: Session, payload: schemas.PlantingCreate) -> models.Planting:
     data = payload.model_dump(by_alias=True)
-    # map "yield" alias back to the ORM column name yield_
     yield_val = data.pop("yield", None)
     obj = models.Planting(**data)
     obj.yield_ = yield_val
-    # derive initial growth stage from crop + planting date
     obj.growthStage = get_current_stage(obj.crop, obj.plantingDate, obj.status)
     db.add(obj)
     db.commit()
@@ -60,17 +53,46 @@ def log_action(
     db: Session,
     planting_id: int,
     action: str,
+    advice_en: str = "",
+    advice_st: str = "",
+    language: str = "en",
 ) -> Optional[models.Planting]:
+    """
+    Update the planting's lastAction and persist the action + advice
+    to the ActionLog history table.
+    """
     obj = db.query(models.Planting).filter(models.Planting.id == planting_id).first()
     if not obj:
         return None
+
+    # Update the planting summary fields
     obj.lastAction     = action
     obj.lastActionDate = date.today().isoformat()
     obj.notes          = action
     obj.updatedAt      = datetime.utcnow()
+
+    # Persist to action log history
+    log_entry = models.ActionLog(
+        planting_id = planting_id,
+        action      = action,
+        advice_en   = advice_en,
+        advice_st   = advice_st,
+        language    = language,
+    )
+    db.add(log_entry)
     db.commit()
     db.refresh(obj)
     return _enrich(obj)
+
+
+def get_action_logs(db: Session, planting_id: int) -> List[models.ActionLog]:
+    """Return all action log entries for a planting, newest first."""
+    return (
+        db.query(models.ActionLog)
+        .filter(models.ActionLog.planting_id == planting_id)
+        .order_by(models.ActionLog.logged_at.desc())
+        .all()
+    )
 
 
 def get_plantings_since(db: Session, since: datetime) -> List[models.Planting]:
@@ -84,10 +106,6 @@ def get_plantings_since(db: Session, since: datetime) -> List[models.Planting]:
 
 
 def upsert_planting_from_sync(db: Session, data: dict) -> models.Planting:
-    """
-    Upsert a single planting record coming from the React IndexedDB sync queue.
-    If 'id' exists in the DB we update, otherwise we insert.
-    """
     planting_id = data.get("id")
     existing = None
     if planting_id:
@@ -99,13 +117,12 @@ def upsert_planting_from_sync(db: Session, data: dict) -> models.Planting:
         for key, value in data.items():
             if hasattr(existing, key) and key not in ("id", "createdAt"):
                 setattr(existing, key, value)
-        existing.yield_     = yield_val
-        existing.updatedAt  = datetime.utcnow()
+        existing.yield_    = yield_val
+        existing.updatedAt = datetime.utcnow()
         db.commit()
         db.refresh(existing)
         return _enrich(existing)
     else:
-        # Remove id so SQLite auto-increments
         data.pop("id", None)
         data.pop("createdAt", None)
         data.pop("updatedAt", None)
