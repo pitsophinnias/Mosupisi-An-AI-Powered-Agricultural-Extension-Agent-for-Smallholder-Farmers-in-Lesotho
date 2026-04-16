@@ -10,7 +10,7 @@ const config = {
   chatService: process.env.REACT_APP_CHAT_SERVICE_URL || 'http://localhost:3002/api',
 
   // Weather — FastAPI on :8002  ← was wrongly hitting :8000
-  weatherService: process.env.REACT_APP_WEATHER_SERVICE_URL || 'http://localhost:8002',
+  weatherService: process.env.REACT_APP_WEATHER_SERVICE_URL || 'http://localhost:8002/api',
 
   // Pest Control — FastAPI on :8001
   pestControlService: process.env.REACT_APP_PEST_CONTROL_SERVICE_URL || 'http://localhost:8001',
