@@ -113,12 +113,60 @@ const PlantingGuide = () => {
   const [actionLogs,     setActionLogs]     = useState([]);
   const [actionAdvice,   setActionAdvice]   = useState(null);
   const [actionLoading,  setActionLoading]  = useState(false);
-  // Maps planting.id → { en, st } for the latest advice shown on the card
   const [latestAdviceMap, setLatestAdviceMap] = useState({});
-  // History dialog — separate from Log Activity
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  // Per-plant weather: maps planting.id → { weather, forecast }
+  const [plantWeatherMap, setPlantWeatherMap] = useState({});
 
-  // Fetch weather on mount
+  // Lesotho town coordinates for per-plant weather lookup
+  const LESOTHO_COORDS = {
+    // Butha-Buthe district
+    'lipelaneng':    { lat: -28.87, lon: 28.09, name: 'Butha-Buthe' },
+    'butha-buthe':   { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
+    'butha buthe':   { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
+    // Leribe district
+    'leribe':        { lat: -28.88, lon: 28.07, name: 'Leribe' },
+    'hlotse':        { lat: -28.88, lon: 28.07, name: 'Leribe' },
+    'teyateyaneng':  { lat: -29.15, lon: 27.74, name: 'Berea' },
+    'thabana-morena':{ lat: -29.15, lon: 27.74, name: 'Berea' },
+    // Maseru district
+    'maseru':        { lat: -29.32, lon: 27.50, name: 'Maseru' },
+    'roma':          { lat: -29.45, lon: 27.80, name: 'Maseru' },
+    'moshoeshoe':    { lat: -29.46, lon: 27.56, name: 'Moshoeshoe I' },
+    'qholaqhoe':     { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
+    // Mafeteng district
+    'mafeteng':      { lat: -29.83, lon: 27.24, name: 'Mafeteng' },
+    // Mohale's Hoek district
+    "mohale's hoek": { lat: -30.16, lon: 27.47, name: "Mohale's Hoek" },
+    'mohales hoek':  { lat: -30.16, lon: 27.47, name: "Mohale's Hoek" },
+    // Quthing district
+    'quthing':       { lat: -30.40, lon: 27.70, name: 'Quthing' },
+    // Qacha's Nek district
+    "qacha's nek":   { lat: -30.12, lon: 28.68, name: "Qacha's Nek" },
+    // Thaba-Tseka district
+    'thaba-tseka':   { lat: -29.52, lon: 28.61, name: 'Thaba-Tseka' },
+    'thaba tseka':   { lat: -29.52, lon: 28.61, name: 'Thaba-Tseka' },
+    // Mokhotlong district
+    'mokhotlong':    { lat: -29.31, lon: 29.06, name: 'Mokhotlong' },
+    'oxbow':         { lat: -28.73, lon: 28.62, name: 'Oxbow' },
+    // Semonkong / highlands
+    'semonkong':     { lat: -29.85, lon: 28.05, name: 'Semonkong' },
+    'katse':         { lat: -29.52, lon: 28.61, name: 'Thaba-Tseka' },
+  };
+
+  const _getCoordsForLocation = (locationStr) => {
+    if (!locationStr) return null;
+    const key = locationStr.toLowerCase().trim();
+    // Exact match first
+    if (LESOTHO_COORDS[key]) return LESOTHO_COORDS[key];
+    // Partial match — check if any known town name is contained in the location string
+    for (const [town, coords] of Object.entries(LESOTHO_COORDS)) {
+      if (key.includes(town) || town.includes(key)) return coords;
+    }
+    return null;
+  };
+
+  // Fetch weather on mount for user's default location
   useEffect(() => {
     const lat = user?.farm_lat || -29.3167;
     const lon = user?.farm_lon || 27.4833;
@@ -130,6 +178,32 @@ const PlantingGuide = () => {
       .then(([cur, fore]) => { setLiveWeather(cur); setLiveForecast(fore); })
       .catch((err) => console.warn('PlantingGuide: weather fetch failed', err));
   }, [user]);
+
+  // Fetch per-plant weather after plantings load
+  useEffect(() => {
+    if (!plantings.length) return;
+    const uniqueLocations = [...new Set(plantings.map(p => p.location).filter(Boolean))];
+    uniqueLocations.forEach(async (location) => {
+      const coords = _getCoordsForLocation(location);
+      if (!coords) return;
+      try {
+        const [cur, fore] = await Promise.all([
+          weatherApi.getCurrent(coords.lat, coords.lon, coords.name),
+          weatherApi.getForecast(coords.lat, coords.lon, 3, coords.name),
+        ]);
+        // Apply to all plantings at this location
+        setPlantWeatherMap(prev => {
+          const updated = { ...prev };
+          plantings.filter(p => p.location === location).forEach(p => {
+            updated[p.id] = { weather: cur, forecast: fore, locationName: coords.name };
+          });
+          return updated;
+        });
+      } catch (err) {
+        console.warn(`PlantingGuide: weather fetch failed for ${location}:`, err.message);
+      }
+    });
+  }, [plantings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadPlantings = useCallback(async () => {
     setLoading(true);
@@ -353,6 +427,252 @@ const PlantingGuide = () => {
     }
   };
 
+  // ── AdviceText ─────────────────────────────────────────────────────────────
+  // Renders AI advice with numbered point cards and clean paragraph formatting
+  const AdviceText = ({ text }) => {
+    if (!text) return null;
+    const lines = text.split('\n').filter(l => l.trim());
+    const items = [];
+    let plainBuffer = [];
+    let pointIndex = 0;
+
+    const flushPlain = () => {
+      if (plainBuffer.length) {
+        items.push({ type: 'plain', text: plainBuffer.join(' ') });
+        plainBuffer = [];
+      }
+    };
+
+    lines.forEach((line) => {
+      const numbered    = line.match(/^\d+\.\s+\*\*(.+?)\*\*[:\-]?\s*(.*)/);
+      const numberedPlain = line.match(/^\d+\.\s+([^:*\n]{3,60}):\s*(.*)/);
+      if (numbered) {
+        flushPlain();
+        items.push({ type: 'point', title: numbered[1], body: numbered[2] });
+      } else if (numberedPlain) {
+        flushPlain();
+        items.push({ type: 'point', title: numberedPlain[1], body: numberedPlain[2] });
+      } else {
+        plainBuffer.push(line.replace(/\*\*(.*?)\*\*/g, '$1'));
+      }
+    });
+    flushPlain();
+
+    return (
+      <Box>
+        {items.map((item, i) => {
+          if (item.type === 'point') {
+            pointIndex++;
+            const num = pointIndex;
+            return (
+              <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.5, alignItems: 'flex-start' }}>
+                <Box sx={{
+                  minWidth: 26, height: 26, borderRadius: '50%',
+                  bgcolor: 'primary.main', color: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.75rem', fontWeight: 700, flexShrink: 0, mt: 0.1,
+                }}>
+                  {num}
+                </Box>
+                <Box>
+                  <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.5 }}>
+                    {item.title}
+                  </Typography>
+                  {item.body && (
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65, mt: 0.25 }}>
+                      {item.body}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            );
+          }
+          return (
+            <Typography key={i} variant="body2" color="text.secondary"
+              sx={{ mb: 1.25, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+              {item.text}
+            </Typography>
+          );
+        })}
+      </Box>
+    );
+  };
+
+  // ── WeatherOutlookText ─────────────────────────────────────────────────────
+  // Renders weather outlook: numbered points + a summary strip at the end
+  const WeatherOutlookText = ({ text }) => {
+    if (!text) return null;
+
+    const lines   = text.split('\n').filter(l => l.trim());
+    const points  = [];
+    const summary = [];
+
+    lines.forEach((line) => {
+      const numbered = line.match(/^\d+\.\s+\*\*(.+?)\*\*[:\-]?\s*(.*)/);
+      const numberedPlain = line.match(/^\d+\.\s+([^:*\n]{3,80}):\s*(.*)/);
+      if (numbered) {
+        points.push({ title: numbered[1].replace(/\s*\(.*?\)\s*/g, ''), body: numbered[2] });
+      } else if (numberedPlain) {
+        points.push({ title: numberedPlain[1], body: numberedPlain[2] });
+      } else if (line.toLowerCase().includes('in summary') || line.toLowerCase().includes('overall')) {
+        summary.push(line.replace(/\*\*(.*?)\*\*/g, '$1'));
+      }
+    });
+
+    // If no numbered points found, just render as clean paragraphs
+    if (points.length === 0) {
+      return (
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+          {text.replace(/\*\*(.*?)\*\*/g, '$1')}
+        </Typography>
+      );
+    }
+
+    const icons = ['🌡️', '🌧️', '📅', '🌤️', '⚠️'];
+
+    return (
+      <Box>
+        {points.map((p, i) => (
+          <Box key={i} sx={{ display: 'flex', gap: 1.25, mb: 1.25, alignItems: 'flex-start' }}>
+            <Typography sx={{ fontSize: '1rem', lineHeight: 1, mt: 0.1, flexShrink: 0 }}>
+              {icons[i] || '🌤️'}
+            </Typography>
+            <Box>
+              <Typography variant="body2" fontWeight={700} color="#1565c0" sx={{ lineHeight: 1.4 }}>
+                {p.title}
+              </Typography>
+              {p.body && (
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6, mt: 0.2 }}>
+                  {p.body}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        ))}
+        {summary.length > 0 && (
+          <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #bbdefb' }}>
+            <Typography variant="body2" color="#1565c0" fontWeight={500} sx={{ lineHeight: 1.6 }}>
+              {summary.join(' ')}
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  // ── WeatherAdviceStrip ────────────────────────────────────────────────────
+  // Generates instant rule-based weather advice for a specific crop + stage
+  // using the live weather data already fetched. No API call — pure logic.
+  const getWeatherAdvice = (crop, stage, weather, forecast) => {
+    if (!weather) return null;
+
+    const temp  = weather.temperature_c;
+    const humid = weather.humidity_pct;
+    const wind  = weather.wind_speed_ms;
+    const rain  = weather.rainfall_mm || 0;
+    const desc  = (weather.description || '').toLowerCase();
+
+    const isRainy    = rain > 5 || desc.includes('rain') || desc.includes('thunder') || desc.includes('shower');
+    const isWindy    = wind > 8;
+    const isFrost    = temp !== null && temp <= 5;
+    const isHot      = temp !== null && temp >= 35;
+    const isHumid    = humid >= 85;
+    const stressStage = stage === 'tasseling' || stage === 'silking' || stage === 'flowering' || stage === 'podFill' || stage === 'grainFill';
+
+    const alerts = [];
+
+    // Rain advice — context of watering and field work
+    if (isRainy) {
+      alerts.push({ icon: '🌧️', color: '#1565c0', bg: '#e3f2fd',
+        en: `Rain today — no need to irrigate. Hold off on foliar feeding until leaves are dry.`,
+        st: `Pula kajeno — ha ho hlokahale ho nosetsa. Letha ho atiha ha makhasi pele o sebelisa manyolo.` });
+    } else if (isWindy) {
+      alerts.push({ icon: '💨', color: '#e65100', bg: '#fff3e0',
+        en: `Wind at ${wind.toFixed(1)} m/s — avoid foliar feeding today, apply when wind drops below 5 m/s.`,
+        st: `Moea o phahameng (${wind.toFixed(1)} m/s) — emit'a ho sebelisa manyolo a makhasi kajeno.` });
+    } else {
+      alerts.push({ icon: '✅', color: '#2e7d32', bg: '#e8f5e9',
+        en: `Good conditions for foliar feeding or irrigation today (${desc || 'clear'}, ${wind?.toFixed(1)} m/s wind).`,
+        st: `Maemo a lokile ho nosetsa kapa ho sebelisa manyolo a makhasi kajeno.` });
+    }
+
+    // Frost risk
+    if (isFrost) {
+      alerts.push({ icon: '🥶', color: '#1565c0', bg: '#e3f2fd',
+        en: `Frost risk at ${temp}°C tonight — cover ${crop} seedlings or young plants if possible.`,
+        st: `Kotsing ea shelwe ha ${temp}°C — ко${crop} e nyane bosiu haeba ho khoneha.` });
+    }
+
+    // Heat stress at critical stages
+    if (isHot && stressStage) {
+      alerts.push({ icon: '🌡️', color: '#c62828', bg: '#ffebee',
+        en: `${temp}°C during ${stage} — ${crop} needs water urgently. Irrigate early morning before 8am.`,
+        st: `${temp}°C nakong ea ${stage} — ${crop} e hloka metsi ka potlako. Nosetsa hoseng pele ha 8am.` });
+    } else if (isHot) {
+      alerts.push({ icon: '🌡️', color: '#e65100', bg: '#fff3e0',
+        en: `High temperature (${temp}°C) — water ${crop} early morning to reduce heat stress on roots.`,
+        st: `Mocheso o phahami (${temp}°C) — nosetsa ${crop} hoseng ho fokotsa kotsing ea mocheso.` });
+    }
+
+    // Humidity and disease risk
+    if (isHumid && !isRainy) {
+      alerts.push({ icon: '💧', color: '#6a1b9a', bg: '#f3e5f5',
+        en: `High humidity (${Math.round(humid)}%) — inspect ${crop} leaves for early signs of fungal disease.`,
+        st: `Kelello e phahami (${Math.round(humid)}%) — hlahloba makhasi a ${crop} bakeng sa mafu a fungal.` });
+    }
+
+    // Upcoming rain — field work timing
+    if (forecast?.days?.length > 0) {
+      const rainDays = forecast.days.slice(0, 4).filter(d =>
+        (d.rainfall_mm || 0) > 3 || (d.description || '').toLowerCase().includes('rain')
+      );
+      if (rainDays.length > 0 && !isRainy) {
+        const nextRain = rainDays[0];
+        const rainDate = new Date(nextRain.date).toLocaleDateString('en-LS', { weekday: 'short', day: 'numeric', month: 'short' });
+        alerts.push({ icon: '📅', color: '#1565c0', bg: '#e3f2fd',
+          en: `Rain coming ${rainDate} — good time to apply dry fertilizer before it, rain will help it absorb.`,
+          st: `Pula e tla ${rainDate} — nako e ntle ea ho sebelisa manyolo e omileng pele, pula e tla e ts'oarisa.` });
+      }
+    }
+
+    return alerts.slice(0, 2);
+  };
+
+  const WeatherAdviceStrip = ({ planting }) => {
+    const stage = getCurrentStage(planting);
+    // Use plant-specific weather if available, otherwise fall back to user's location weather
+    const pw      = plantWeatherMap[planting.id];
+    const weather = pw?.weather || liveWeather;
+    const forecast = pw?.forecast || liveForecast;
+    const locationName = pw?.locationName || weather?.location_name || '';
+
+    const alerts = getWeatherAdvice(planting.crop, stage, weather, forecast);
+    if (!alerts || alerts.length === 0) return null;
+
+    return (
+      <Box sx={{ mt: 1.5 }}>
+        {locationName && (
+          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 0.75, fontStyle: 'italic' }}>
+            🌍 {language === 'en' ? `Weather at ${locationName}` : `Boemo ba leholimo ho ${locationName}`}
+          </Typography>
+        )}
+        {alerts.map((alert, i) => (
+          <Box key={i} sx={{
+            display: 'flex', alignItems: 'flex-start', gap: 1,
+            mb: i < alerts.length - 1 ? 0.75 : 0,
+            p: 1.25, borderRadius: 2,
+            bgcolor: alert.bg, border: `1px solid ${alert.color}22`,
+          }}>
+            <Typography sx={{ fontSize: '0.9rem', flexShrink: 0, mt: 0.1 }}>{alert.icon}</Typography>
+            <Typography variant="caption" sx={{ color: alert.color, lineHeight: 1.5, fontWeight: 500 }}>
+              {language === 'en' ? alert.en : alert.st}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    );
+  };
+
   // ── PlantingCard ──────────────────────────────────────────────────────────
   const PlantingCard = ({ planting }) => {
     const progress     = calculateGrowthProgress(planting);
@@ -367,7 +687,7 @@ const PlantingGuide = () => {
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               <Typography variant="subtitle1" fontWeight={600}>
-                {t ? t(planting.crop) : planting.crop} — {planting.location}
+                {t ? t(planting.crop) : planting.crop}, {planting.location}
               </Typography>
               <Chip
                 label={planting.status === 'harvested' ? (language === 'en' ? 'Harvested' : 'E Kotutsoeng') : (language === 'en' ? 'Growing' : 'E Mela')}
@@ -430,6 +750,11 @@ const PlantingGuide = () => {
                 {language === 'en' ? latestAdviceMap[planting.id].en : latestAdviceMap[planting.id].st}
               </Typography>
             </Box>
+          )}
+
+          {/* Weather advice — uses plant's location weather, falls back to user location */}
+          {(plantWeatherMap[planting.id] || liveWeather) && planting.status !== 'harvested' && (
+            <WeatherAdviceStrip planting={planting} />
           )}
           {planting.status === 'harvested' && (
             <Box sx={{ mt: 2, p: 2, bgcolor: theme.palette.success.light, borderRadius: 1 }}>
@@ -565,7 +890,7 @@ const PlantingGuide = () => {
           {language === 'en' ? 'Log Activity' : 'Ngola Ketso'}
           {selectedPlanting && (
             <Typography variant="caption" display="block" color="textSecondary">
-              {t ? t(selectedPlanting.crop) : selectedPlanting.crop} — {selectedPlanting.location}
+              {t ? t(selectedPlanting.crop) : selectedPlanting.crop}, {selectedPlanting.location}
             </Typography>
           )}
         </DialogTitle>
@@ -612,7 +937,7 @@ const PlantingGuide = () => {
           {language === 'en' ? 'Activity History' : 'Histori ea Liketso'}
           {selectedPlanting && (
             <Typography variant="caption" display="block" color="textSecondary">
-              {t ? t(selectedPlanting.crop) : selectedPlanting.crop} — {selectedPlanting.location}
+              {t ? t(selectedPlanting.crop) : selectedPlanting.crop}, {selectedPlanting.location}
             </Typography>
           )}
         </DialogTitle>
@@ -671,22 +996,29 @@ const PlantingGuide = () => {
 
       {/* AI Advice Dialog */}
       <Dialog open={openAdviceDialog} onClose={() => setOpenAdviceDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
+        <DialogTitle sx={{ pb: 1 }}>
           {language === 'en' ? '🌱 AI Planting Advice' : '🌱 Keletso ea AI ea Ho Jala'}
-          {selectedPlanting && ` – ${t ? t(selectedPlanting.crop) : selectedPlanting.crop}`}
+          {selectedPlanting && (
+            <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.25 }}>
+              {t ? t(selectedPlanting.crop) : selectedPlanting.crop}, {selectedPlanting.location}
+              {selectedPlanting.currentStage && ` · ${selectedPlanting.currentStage} stage`}
+            </Typography>
+          )}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ pt: 0 }}>
           {adviceLoading ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4, gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 5, gap: 2 }}>
               <CircularProgress />
-              <Typography color="textSecondary">
+              <Typography color="textSecondary" variant="body2">
                 {language === 'en' ? 'Generating advice from Agromet Bulletin…' : 'E hlahisa keletso ho tsoa Agromet Bulletin…'}
               </Typography>
             </Box>
           ) : adviceData ? (
             <Box sx={{ mt: 1 }}>
+
+              {/* Live weather strip */}
               {liveWeather && (
-                <Box sx={{ mb: 2, p: 1.5, bgcolor: '#e8f5e9', borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ mb: 2, p: 1.25, bgcolor: '#e8f5e9', borderRadius: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <WeatherIcon fontSize="small" sx={{ color: '#2e7d32' }} />
                   <Typography variant="caption" sx={{ color: '#2e7d32' }}>
                     {language === 'en' ? 'Current conditions: ' : 'Maemo ha joale: '}
@@ -695,31 +1027,70 @@ const PlantingGuide = () => {
                   </Typography>
                 </Box>
               )}
-              <Typography variant="subtitle1" fontWeight={700} gutterBottom>{language === 'en' ? 'Advice' : 'Keletso'}</Typography>
-              <Typography variant="body2" sx={{ mb: 2 }}>{language === 'en' ? adviceData.advice_en : adviceData.advice_st}</Typography>
-              <Typography variant="subtitle1" fontWeight={700} gutterBottom>{language === 'en' ? 'Weather Outlook' : 'Boemo ba Leholimo'}</Typography>
-              <Typography variant="body2" sx={{ mb: 2 }}>{language === 'en' ? adviceData.weather_outlook_en : adviceData.weather_outlook_st}</Typography>
+
+              {/* Advice section */}
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Box sx={{ width: 4, height: 20, bgcolor: 'primary.main', borderRadius: 1 }} />
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    {language === 'en' ? 'Advice' : 'Keletso'}
+                  </Typography>
+                </Box>
+                <AdviceText text={language === 'en' ? adviceData.advice_en : adviceData.advice_st} />
+              </Box>
+
+              {/* Weather Outlook */}
+              {(adviceData.weather_outlook_en || adviceData.weather_outlook_st) && (
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f0f7ff', borderRadius: 2, border: '1px solid #bbdefb' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                    <WeatherIcon fontSize="small" sx={{ color: '#1565c0' }} />
+                    <Typography variant="subtitle2" fontWeight={700} color="#1565c0">
+                      {language === 'en' ? 'Weather Outlook' : 'Boemo ba Leholimo'}
+                    </Typography>
+                  </Box>
+                  <WeatherOutlookText
+                    text={language === 'en' ? adviceData.weather_outlook_en : adviceData.weather_outlook_st}
+                  />
+                </Box>
+              )}
+
+              {/* Crop Rotation */}
               {adviceData.rotation_recommendation && (
-                <>
-                  <Typography variant="subtitle1" fontWeight={700} gutterBottom>{language === 'en' ? 'Crop Rotation' : 'Phetiso ea Lijalo'}</Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>{adviceData.rotation_recommendation.reason}</Typography>
-                  <Typography variant="body2" color="textSecondary">
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: '#fff8e1', borderRadius: 2, border: '1px solid #ffe082' }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="#e65100" gutterBottom>
+                    🔄 {language === 'en' ? 'Crop Rotation' : 'Phetiso ea Lijalo'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    {adviceData.rotation_recommendation.reason}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>{language === 'en' ? 'Next crops: ' : 'Lijalo tse latelang: '}</strong>
+                    {adviceData.rotation_recommendation.next?.join(', ')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>{language === 'en' ? 'Soil prep: ' : 'Tokiso ea mobu: '}</strong>
                     {language === 'en' ? adviceData.rotation_recommendation.soilPrep : adviceData.rotation_recommendation.soilPrep_st}
                   </Typography>
-                </>
+                </Box>
               )}
+
+              {/* Sources */}
               {adviceData.sources?.length > 0 && (
-                <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: 'block' }}>
-                  📄 {adviceData.sources.join(', ')}
+                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
+                  📄 {adviceData.sources.join(' · ')}
                 </Typography>
               )}
             </Box>
           ) : (
-            <Typography color="error">{language === 'en' ? 'Failed to load advice.' : 'Ho hapolla keletso ho hlolehile.'}</Typography>
+            <Typography color="error" sx={{ py: 2 }}>
+              {language === 'en' ? 'Failed to load advice.' : 'Ho hapolla keletso ho hlolehile.'}
+            </Typography>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenAdviceDialog(false)} sx={{ minHeight: 44 }}>{language === 'en' ? 'Close' : 'Koala'}</Button>
+          <Button onClick={() => setOpenAdviceDialog(false)} sx={{ minHeight: 44 }}>
+            {language === 'en' ? 'Close' : 'Koala'}
+          </Button>
         </DialogActions>
       </Dialog>
 
