@@ -7,6 +7,8 @@ context for smallholder farmers in Lesotho. Aggregates data from:
   - OpenWeatherMap     (real-time + short-term forecast)
   - LMS (stub)         (Lesotho Meteorological Services - plug in when available)
 """
+from dotenv import load_dotenv
+load_dotenv()
 
 import logging
 from contextlib import asynccontextmanager
