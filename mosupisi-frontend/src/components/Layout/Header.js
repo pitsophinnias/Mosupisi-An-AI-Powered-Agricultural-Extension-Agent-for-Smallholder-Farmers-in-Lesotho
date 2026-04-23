@@ -7,6 +7,9 @@ import MenuIcon from '@mui/icons-material/Menu';
 import LanguageIcon from '@mui/icons-material/Language';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import ChatIcon from '@mui/icons-material/Chat';
+import WeatherIcon from '@mui/icons-material/WbSunny';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
 import { useTheme } from '@mui/material/styles';
@@ -46,11 +49,11 @@ const Header = ({ handleDrawerToggle }) => {
   };
 
   const menuItems = [
-    { text: t('nav.dashboard'), path: '/' },
-    { text: t('nav.chat'), path: '/chat' },
-    { text: t('nav.planting'), path: '/planting-guide', icon: <AgricultureIcon /> },
-    { text: t('nav.pest'), path: '/pest-control', icon: <BugReportIcon /> },
-    { text: t('nav.weather'), path: '/weather' },
+    { text: t('nav.dashboard'), path: '/', icon: <DashboardIcon sx={{ fontSize: 18 }} /> },
+    { text: t('nav.chat'), path: '/chat', icon: <ChatIcon sx={{ fontSize: 18 }} /> },
+    { text: t('nav.planting'), path: '/planting-guide', icon: <AgricultureIcon sx={{ fontSize: 18 }} /> },
+    { text: t('nav.pest'), path: '/pest-control', icon: <BugReportIcon sx={{ fontSize: 18 }} /> },
+    { text: t('nav.weather'), path: '/weather', icon: <WeatherIcon sx={{ fontSize: 18 }} /> },
   ];
 
   return (
@@ -107,18 +110,27 @@ const Header = ({ handleDrawerToggle }) => {
             ))}
 
             {/* Language Toggle */}
-            <Tooltip title={language === 'en' ? 'Sesotho' : 'English'}>
+            <Tooltip title={language === 'en' ? 'Switch to Sesotho' : 'Fetola ho Sesotho'}>
               <Button
                 onClick={handleLanguageClick}
-                startIcon={<LanguageIcon />}
+                startIcon={<LanguageIcon sx={{ fontSize: '16px !important' }} />}
                 sx={{
-                  color: 'white', ml: 1,
+                  color: 'white',
+                  ml: 1,
                   border: '1px solid rgba(255,255,255,0.3)',
-                  borderRadius: 2, minHeight: 44, px: 2,
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'white' }
+                  borderRadius: 2,
+                  minHeight: 34,
+                  height: 34,
+                  px: 1.5,
+                  fontSize: '0.8rem',
+                  textTransform: 'none',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    borderColor: 'white'
+                  }
                 }}
               >
-                {language === 'en' ? 'Sesotho' : 'English'}
+                {language === 'en' ? 'English' : 'Sesotho'}
               </Button>
             </Tooltip>
 
@@ -144,12 +156,19 @@ const Header = ({ handleDrawerToggle }) => {
 
         {/* Mobile: Language + Avatar */}
         {!isDesktop && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <IconButton
-              color="inherit" onClick={handleLanguageClick}
-              sx={{ border: '1px solid rgba(255,255,255,0.3)', borderRadius: 2, minHeight: 44, minWidth: 44 }}
+              color="inherit"
+              onClick={handleLanguageClick}
+              sx={{
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: 2,
+                width: 36,
+                height: 36,
+                padding: 0,
+              }}
             >
-              <LanguageIcon />
+              <LanguageIcon sx={{ fontSize: 18 }} />
             </IconButton>
 
             {isAuthenticated && (
