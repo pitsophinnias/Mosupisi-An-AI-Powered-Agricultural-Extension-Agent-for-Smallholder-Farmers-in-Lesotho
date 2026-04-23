@@ -37,8 +37,13 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { dbUtils } from '../../db/db';
-import { regions, crops, languages } from '../../data/mockData';
+import { crops, languages } from '../../data/mockData';
 import { format } from 'date-fns';
+
+const DISTRICTS = [
+  "Berea", "Butha-Buthe", "Leribe", "Mafeteng", "Maseru",
+  "Mohale's Hoek", "Mokhotlong", "Qacha's Nek", "Quthing", "Thaba-Tseka",
+];
 
 const Profile = () => {
   const { user, updateUser } = useAuth();
@@ -261,9 +266,9 @@ const Profile = () => {
                       label={t('register.region')}
                       startAdornment={<LocationIcon sx={{ mr: 1, color: theme.palette.primary.main }} />}
                     >
-                      {regions.map((region) => (
-                        <MenuItem key={region} value={region}>
-                          {t(`regions.${region.toLowerCase().replace(/'/g, '').replace(/\s+/g, '')}`) || region}
+                      {DISTRICTS.map((district) => (
+                        <MenuItem key={district} value={district}>
+                          {district}
                         </MenuItem>
                       ))}
                     </Select>

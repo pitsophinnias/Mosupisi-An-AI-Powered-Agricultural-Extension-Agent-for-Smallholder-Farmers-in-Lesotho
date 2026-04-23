@@ -1,19 +1,20 @@
-// Comprehensive translation utility
 export const translations = {
   en: {
     // App
     'app.name': 'Mosupisi',
     'app.tagline': 'AI-Powered Agricultural Extension Agent',
-    
+
     // Navigation
     'nav.dashboard': 'Dashboard',
     'nav.chat': 'Chat',
+    'nav.planting': 'Planting Guide',
+    'nav.pest': 'Pest Control',
     'nav.profile': 'Profile',
     'nav.weather': 'Weather',
     'nav.logout': 'Logout',
     'nav.login': 'Login',
     'nav.register': 'Register',
-    
+
     // Common
     'welcome': 'Welcome',
     'loading': 'Loading...',
@@ -36,7 +37,7 @@ export const translations = {
     'view': 'View',
     'viewAll': 'View All',
     'close': 'Close',
-    
+
     // Weather
     'weather.title': 'Weather & Alerts',
     'weather.temperature': 'Temperature',
@@ -56,7 +57,7 @@ export const translations = {
     'weather.alert.heavy_rain': 'Heavy rainfall expected. Protect young crops.',
     'weather.alert.storm': 'Storm warning. Secure livestock and harvest ripe crops.',
     'weather.alert.high_temp': 'High temperature. Ensure adequate irrigation.',
-    
+
     // Chat
     'chat.title': 'Ask Mosupisi',
     'chat.input': 'Type your question...',
@@ -68,7 +69,7 @@ export const translations = {
     'chat.greeting_st': '👋 Ntsebise eng kapa eng ka temo Lesotho!',
     'chat.offline_mode': 'Offline Mode - Using cached responses',
     'chat.online_mode': 'Online - Connected',
-    
+
     // Dashboard
     'dashboard.quick_actions': 'Quick Actions',
     'dashboard.recent_advice': 'Recent Advice',
@@ -79,7 +80,7 @@ export const translations = {
     'dashboard.alerts': 'Alerts',
     'dashboard.no_queries': 'No queries yet. Ask Mosupisi a question!',
     'dashboard.ask_question': 'Ask Question',
-    
+
     // Profile
     'profile.title': 'Farmer Profile',
     'profile.mobile': 'Mobile Number',
@@ -96,7 +97,7 @@ export const translations = {
     'profile.update_error': 'Failed to update profile',
     'profile.no_history': 'No queries yet',
     'profile.no_history_desc': 'Ask Mosupisi a question to get started',
-    
+
     // Auth
     'login.title': 'Login to Mosupisi',
     'login.mobile': 'Mobile Number',
@@ -104,10 +105,12 @@ export const translations = {
     'login.button': 'Login',
     'login.forgot': 'Forgot Password?',
     'login.noAccount': "Don't have an account? Register",
+    'login.registerLink': "Don't have an account? ",
+    'login.registerHere': 'Register here',
+    'login.rememberMe': 'Remember me',
     'login.success': 'Login successful!',
     'login.error': 'Invalid mobile number or password',
-    'login.demo_hint': 'Demo: Use 266-1234-5678 (any password)',
-    
+
     'register.title': 'Register as Farmer',
     'register.name': 'Full Name',
     'register.mobile': 'Mobile Number',
@@ -115,11 +118,14 @@ export const translations = {
     'register.crops': 'Select Crops',
     'register.language': 'Preferred Language',
     'register.button': 'Register',
+    'register.link': "Don't have an account? Register here",
     'register.haveAccount': 'Already have an account? Login',
+    'register.loginLink': 'Already have an account? ',
+    'register.loginHere': 'Login here',
     'register.success': 'Registration successful!',
     'register.error': 'Registration failed',
     'register.select_crops': 'Select at least one crop',
-    
+
     // Crops
     'maize': 'Maize',
     'sorghum': 'Sorghum',
@@ -129,7 +135,7 @@ export const translations = {
     'crop.maize': 'Maize',
     'crop.sorghum': 'Sorghum',
     'crop.legumes': 'Legumes',
-    
+
     // Regions
     'regions.maseru': 'Maseru',
     'regions.leribe': 'Leribe',
@@ -138,8 +144,10 @@ export const translations = {
     'regions.quthing': 'Quthing',
     'regions.buthabuthe': 'Butha-Buthe',
     'regions.mokhotlong': 'Mokhotlong',
-    'regions.thabatseka': "Thaba-Tseka",
-    
+    'regions.thabatseka': 'Thaba-Tseka',
+    'regions.qachasnek': "Qacha's Nek",
+    'regions.berea': 'Berea',
+
     // Alerts
     'alert.frost': 'Frost risk - protect crops',
     'alert.drought': 'Drought conditions - conserve water',
@@ -147,14 +155,14 @@ export const translations = {
     'alert.pest': 'Pest outbreak - monitor fields',
     'alert.heavy_rain': 'Heavy rainfall expected',
     'alert.high_temp': 'High temperature expected',
-    
+
     // Tips
     'tip.planting': 'Best time to plant',
     'tip.harvest': 'Harvest time',
     'tip.fertilizer': 'Fertilizer application',
     'tip.water': 'Water management',
     'tip.pest_control': 'Pest control',
-    
+
     // Errors
     'error.general': 'Something went wrong',
     'error.network': 'Network error. Please check your connection.',
@@ -162,28 +170,30 @@ export const translations = {
     'error.login': 'Login failed. Please try again.',
     'error.register': 'Registration failed. Please try again.',
     'error.save': 'Failed to save. Please try again.',
-    
+
     // Placeholders
     'placeholder.question': 'e.g., When to plant maize in Maseru?',
     'placeholder.search': 'Search...',
     'placeholder.name': 'Enter your full name',
-    'placeholder.mobile': '266-XXXX-XXXX',
+    'placeholder.mobile': '57123456 or +26657123456',
   },
-  
+
   st: {
     // App
     'app.name': 'Mosupisi',
     'app.tagline': 'Moemeli oa Temo o Matlafalitsoeng ke AI',
-    
+
     // Navigation
     'nav.dashboard': 'Diboto',
     'nav.chat': 'Puisano',
+    'nav.planting': 'Tataiso ea Ho Jala',
+    'nav.pest': 'Taolo ea Likokonyana',
     'nav.profile': 'Boitsebiso',
     'nav.weather': 'Boemo ba Leholimo',
     'nav.logout': 'Tsoa',
     'nav.login': 'Kena',
     'nav.register': 'Ingodisetse',
-    
+
     // Common
     'welcome': 'Lumela',
     'loading': 'E ntse e jarolla...',
@@ -206,7 +216,7 @@ export const translations = {
     'view': 'Bona',
     'viewAll': 'Bona Tsohle',
     'close': 'Kwala',
-    
+
     // Weather
     'weather.title': 'Boemo ba Leholimo le Litemoso',
     'weather.temperature': 'Mocheso',
@@ -226,7 +236,7 @@ export const translations = {
     'weather.alert.heavy_rain': 'Pula e matla e lebelletsoe. Sireletsa lijalo tse nyane.',
     'weather.alert.storm': 'Temoso ea sefefo. Boloka liphoofolo le ho kotula lijalo tse butsoitseng.',
     'weather.alert.high_temp': 'Mocheso o phahamile. Etsa bonnete ba ho nosetsa.',
-    
+
     // Chat
     'chat.title': 'Botsa Mosupisi',
     'chat.input': 'Ngola potso ea hau...',
@@ -238,7 +248,7 @@ export const translations = {
     'chat.greeting_st': '👋 Ntsebise eng kapa eng ka temo Lesotho!',
     'chat.offline_mode': 'Ha u hokahane - Ho sebelisoa likarabo tse bolokiloeng',
     'chat.online_mode': 'U hokahane - E sebetsa',
-    
+
     // Dashboard
     'dashboard.quick_actions': 'Diketsahalo tse Potlakileng',
     'dashboard.recent_advice': 'Likeletso tsa Morao tjena',
@@ -249,7 +259,7 @@ export const translations = {
     'dashboard.alerts': 'Litemoso',
     'dashboard.no_queries': 'Ha ho lipotso. Botsa Mosupisi potso!',
     'dashboard.ask_question': 'Botsa Potso',
-    
+
     // Profile
     'profile.title': 'Boitsebiso ba Sehoai',
     'profile.mobile': 'Nomoro ea Mohala',
@@ -266,7 +276,7 @@ export const translations = {
     'profile.update_error': 'Ho hlolehile ho ntlafatsa boitsebiso',
     'profile.no_history': 'Ha ho lipotso',
     'profile.no_history_desc': 'Botsa Mosupisi potso ho qala',
-    
+
     // Auth
     'login.title': 'Kena ho Mosupisi',
     'login.mobile': 'Nomoro ea Mohala',
@@ -274,10 +284,12 @@ export const translations = {
     'login.button': 'Kena',
     'login.forgot': 'U lebetse Phasewete?',
     'login.noAccount': 'Ha u na akhaonto? Ingodisetse',
+    'login.registerLink': 'Ha u na akhaonto? ',
+    'login.registerHere': 'Ingodisetse mona',
+    'login.rememberMe': 'Nkgopole',
     'login.success': 'U kene ka katleho!',
     'login.error': 'Nomoro kapa phasewete e fosahetse',
-    'login.demo_hint': 'Demo: Sebelisa 266-1234-5678 (phasewete efe kapa efe)',
-    
+
     'register.title': 'Ingodisetse joalo ka Sehoai',
     'register.name': 'Lebitso le Felletseng',
     'register.mobile': 'Nomoro ea Mohala',
@@ -285,11 +297,14 @@ export const translations = {
     'register.crops': 'Khetha Lijalo',
     'register.language': 'Puo eo u e Ratang',
     'register.button': 'Ingodisetse',
+    'register.link': 'Ha u na akhaonto? Ingodisetse mona',
     'register.haveAccount': 'U se u na le akhaonto? Kena',
+    'register.loginLink': 'U se u na le akhaonto? ',
+    'register.loginHere': 'Kena mona',
     'register.success': 'Boingodiso bo atlehile!',
     'register.error': 'Boingodiso bo hlolehile',
     'register.select_crops': 'Khetha bonyane sejalo se le seng',
-    
+
     // Crops
     'maize': 'Poone',
     'sorghum': 'Mabele',
@@ -299,7 +314,7 @@ export const translations = {
     'crop.maize': 'Poone',
     'crop.sorghum': 'Mabele',
     'crop.legumes': 'Linaoa',
-    
+
     // Regions
     'regions.maseru': 'Maseru',
     'regions.leribe': 'Leribe',
@@ -308,8 +323,10 @@ export const translations = {
     'regions.quthing': 'Quthing',
     'regions.buthabuthe': 'Butha-Buthe',
     'regions.mokhotlong': 'Mokhotlong',
-    'regions.thabatseka': "Thaba-Tseka",
-    
+    'regions.thabatseka': 'Thaba-Tseka',
+    'regions.qachasnek': "Qacha's Nek",
+    'regions.berea': 'Berea',
+
     // Alerts
     'alert.frost': 'Kotsi ya seramela - sireletsa lijalo',
     'alert.drought': 'Komello - boloka metsi',
@@ -317,14 +334,14 @@ export const translations = {
     'alert.pest': 'Ho phatloha ha likokonyana - hlahloba masimo',
     'alert.heavy_rain': 'Pula e matla e lebelletsoe',
     'alert.high_temp': 'Mocheso o phahameng o lebelletsoe',
-    
+
     // Tips
     'tip.planting': 'Nako e ntle ea ho jala',
     'tip.harvest': 'Nako ea kotulo',
     'tip.fertilizer': 'Ho sebelisa manyolo',
     'tip.water': 'Taolo ea metsi',
     'tip.pest_control': 'Taolo ea likokonyana',
-    
+
     // Errors
     'error.general': 'Ho na le phoso',
     'error.network': 'Phoso ya marangrang. Ka kopo hlahloba khokahano.',
@@ -332,16 +349,15 @@ export const translations = {
     'error.login': 'Ho kena ho hlolehile. Ka kopo leka hape.',
     'error.register': 'Boingodiso bo hlolehile. Ka kopo leka hape.',
     'error.save': 'Ho boloka ho hlolehile. Ka kopo leka hape.',
-    
+
     // Placeholders
     'placeholder.question': 'mohlala, Nako ya ho jala poone Maseru?',
     'placeholder.search': 'Batla...',
     'placeholder.name': 'Ngola lebitso la hau',
-    'placeholder.mobile': '266-XXXX-XXXX',
+    'placeholder.mobile': '57123456 kapa +26657123456',
   }
 };
 
-// Translation function
 export const t = (key, language = 'en') => {
   return translations[language]?.[key] || translations['en'][key] || key;
 };

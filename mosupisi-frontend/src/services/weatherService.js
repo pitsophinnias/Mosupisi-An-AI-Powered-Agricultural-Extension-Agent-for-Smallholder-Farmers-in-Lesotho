@@ -20,7 +20,7 @@
 import apiConfig from '../config/api.config';
 import { dbUtils } from '../db/db';
 
-const BASE = apiConfig.weatherService;  // http://localhost:8002/api
+const BASE = apiConfig.weatherService + '/api';  // http://localhost:8002/api
 
 // Default coordinates: Maseru, Lesotho
 const DEFAULT_LAT = -29.3167;
@@ -207,7 +207,7 @@ export async function getSourceStatus() {
  * so WeatherAlerts.js getWeatherIcon() keeps working unchanged.
  */
 export function descriptionToCondition(description = '') {
-  const d = description.toLowerCase();
+  const d = (description || '').toLowerCase();
   if (d.includes('thunder') || d.includes('storm')) return 'stormy';
   if (d.includes('rain')    || d.includes('drizzle') || d.includes('shower')) return 'rainy';
   if (d.includes('overcast')) return 'cloudy';

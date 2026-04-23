@@ -44,13 +44,12 @@ const Dashboard = () => {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // ── Weather: try live API, fall back to cache ──────────────────────
+      // Weather: try live API, fall back to cache
       try {
         const { data, isStale } = await getCurrentWeather();
         setWeather(data);
         setWeatherStale(isStale);
 
-        // Build alerts from the forecast if we're online
         if (!isStale) {
           const forecastResult = await getWeatherForecast(
             data.latitude, data.longitude, 7, data.location_name,
@@ -61,7 +60,6 @@ const Dashboard = () => {
           setAlerts(forecastAlerts);
         }
       } catch {
-        // Live weather totally unavailable — try IndexedDB fallback
         const cached = await db.weather.orderBy('date').first();
         if (cached) {
           setWeather(cached);
@@ -73,11 +71,11 @@ const Dashboard = () => {
         setAlerts(weatherAlerts);
       }
 
-      // ── Recent queries from IndexedDB ─────────────────────────────────
+      // Recent queries from IndexedDB
       const queries = await db.queries.orderBy('timestamp').reverse().limit(5).toArray();
       setRecentQueries(queries);
 
-      // ── Crop guides for user's crops ──────────────────────────────────
+      // Crop guides for user's crops
       if (user?.crops?.length > 0) {
         const guides = [];
         for (const crop of user.crops) {
@@ -93,7 +91,6 @@ const Dashboard = () => {
     }
   };
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
   const formatDate = (dateString) => {
     try {
       if (!dateString) return '';
@@ -104,11 +101,6 @@ const Dashboard = () => {
     }
   };
 
-  /**
-   * Read a weather value from either the new backend shape (CurrentWeather)
-   * or the old IndexedDB mock shape — so the dashboard never crashes during
-   * the migration period when stale data may still be in the cache.
-   */
   const wx = {
     tempMin:     weather?.temp_min_c     ?? weather?.temp?.min     ?? null,
     tempMax:     weather?.temp_max_c     ?? weather?.temp?.max     ?? null,
@@ -120,11 +112,16 @@ const Dashboard = () => {
 
   const conditionLabel = (desc) => {
     if (language === 'en') return desc;
-    const map = { sunny: 'Chesa', rainy: 'Pula', cloudy: 'Khoalifi', stormy: 'Sefefo', 'partly cloudy': 'Khoalifi hanyane' };
+    const map = {
+      sunny: 'Chesa',
+      rainy: 'Pula',
+      cloudy: 'Khoalifi',
+      stormy: 'Sefefo',
+      'partly cloudy': 'Khoalifi hanyane',
+    };
     return map[descriptionToCondition(desc)] || desc;
   };
 
-  // ── Sub-components ────────────────────────────────────────────────────────
   const QuickActionCard = ({ title, icon, onClick, color, subtitle }) => (
     <Card sx={{ height: '100%' }}>
       <CardActionArea onClick={onClick} sx={{ height: '100%', p: 2 }}>
@@ -145,11 +142,10 @@ const Dashboard = () => {
     </Paper>
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-        <Typography>{language === 'en' ? 'Loading dashboard…' : 'E ntse e jarolla diboto…'}</Typography>
+        <Typography>{language === 'en' ? 'Loading dashboard...' : 'E ntse e jarolla diboto...'}</Typography>
       </Container>
     );
   }
@@ -223,26 +219,40 @@ const Dashboard = () => {
       </Typography>
       <Grid container spacing={2} sx={{ mb: 4 }}>
         <Grid item xs={6} sm={3}>
-          <QuickActionCard title={t('chat.title')} icon={<ChatIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/chat')} color={theme.palette.primary.main}
-            subtitle={language === 'en' ? 'Ask questions' : 'Botsa lipotso'} />
+          <QuickActionCard
+            title={t('chat.title')}
+            icon={<ChatIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/chat')}
+            color={theme.palette.primary.main}
+            subtitle={language === 'en' ? 'Ask questions' : 'Botsa lipotso'}
+          />
         </Grid>
         <Grid item xs={6} sm={3}>
-          <QuickActionCard title={t('weather.title')} icon={<WeatherIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/weather')} color={theme.palette.info.main}
-            subtitle={language === 'en' ? 'Check forecast' : 'Sheba boemo'} />
+          <QuickActionCard
+            title={t('weather.title')}
+            icon={<WeatherIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/weather')}
+            color={theme.palette.info.main}
+            subtitle={language === 'en' ? 'Check forecast' : 'Sheba boemo'}
+          />
         </Grid>
         <Grid item xs={6} sm={3}>
-          <QuickActionCard title={language === 'en' ? 'Planting Guide' : 'Tataiso ea Ho Jala'}
-            icon={<AgricultureIcon sx={{ fontSize: 40 }} />} onClick={() => navigate('/planting-guide')}
+          <QuickActionCard
+            title={language === 'en' ? 'Planting Guide' : 'Tataiso ea Ho Jala'}
+            icon={<AgricultureIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/planting-guide')}
             color={theme.palette.warning.dark}
-            subtitle={language === 'en' ? 'Track your crops' : 'Latelela lijalo tsa hau'} />
+            subtitle={language === 'en' ? 'Track your crops' : 'Latelela lijalo tsa hau'}
+          />
         </Grid>
         <Grid item xs={6} sm={3}>
-          <QuickActionCard title={language === 'en' ? 'Pest Control' : 'Taolo ea Likokonyana'}
-            icon={<PestIcon sx={{ fontSize: 40 }} />} onClick={() => navigate('/pest-control')}
+          <QuickActionCard
+            title={language === 'en' ? 'Pest Control' : 'Taolo ea Likokonyana'}
+            icon={<PestIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/pest-control')}
             color={theme.palette.secondary.main}
-            subtitle={language === 'en' ? 'Manage pests' : 'Laola likokonyana'} />
+            subtitle={language === 'en' ? 'Manage pests' : 'Laola likokonyana'}
+          />
         </Grid>
       </Grid>
 
@@ -255,8 +265,14 @@ const Dashboard = () => {
               {language === 'en' ? "Today's Weather" : 'Boemo ba Leholimo ba Kajeno'}
             </Typography>
             {weatherIsStale && (
-              <Tooltip title={language === 'en' ? 'Showing cached data — no connection' : 'Ho bontsha data e bolokiloeng'}>
-                <Chip icon={<OfflineIcon />} label={language === 'en' ? 'Cached' : 'E bolokiloe'} size="small" color="warning" variant="outlined" />
+              <Tooltip title={language === 'en' ? 'Showing cached data, no connection' : 'Ho bontsha data e bolokiloeng'}>
+                <Chip
+                  icon={<OfflineIcon />}
+                  label={language === 'en' ? 'Cached' : 'E bolokiloe'}
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                />
               </Tooltip>
             )}
           </Box>
@@ -268,11 +284,10 @@ const Dashboard = () => {
                 <Typography variant="body2" color="textSecondary">
                   {language === 'en' ? 'Temperature' : 'Mocheso'}
                 </Typography>
-                {/* Show current temp if available (CurrentWeather), else min–max range (DailyForecast) */}
                 <Typography variant="h6">
                   {wx.tempCurrent != null
                     ? `${Math.round(wx.tempCurrent)}°C`
-                    : `${Math.round(wx.tempMin ?? 0)}°C – ${Math.round(wx.tempMax ?? 0)}°C`}
+                    : `${Math.round(wx.tempMin ?? 0)}°C to ${Math.round(wx.tempMax ?? 0)}°C`}
                 </Typography>
               </Box>
             </Grid>
@@ -283,7 +298,7 @@ const Dashboard = () => {
                   {language === 'en' ? 'Humidity' : 'Boleng ba Metsi'}
                 </Typography>
                 <Typography variant="h6">
-                  {wx.humidity != null ? `${Math.round(wx.humidity)}%` : '—'}
+                  {wx.humidity != null ? `${Math.round(wx.humidity)}%` : 'N/A'}
                 </Typography>
               </Box>
             </Grid>
@@ -294,7 +309,7 @@ const Dashboard = () => {
                   {language === 'en' ? 'Wind' : 'Moea'}
                 </Typography>
                 <Typography variant="h6">
-                  {wx.windMs != null ? `${wx.windMs.toFixed(1)} m/s` : '—'}
+                  {wx.windMs != null ? `${wx.windMs.toFixed(1)} m/s` : 'N/A'}
                 </Typography>
               </Box>
             </Grid>
@@ -332,8 +347,11 @@ const Dashboard = () => {
                     <Typography variant="body2" color="textSecondary" paragraph>
                       {language === 'en' ? guide.content : guide.content_st || guide.content}
                     </Typography>
-                    <Chip label={guide.source} size="small"
-                      sx={{ backgroundColor: theme.palette.primary.light, color: 'white' }} />
+                    <Chip
+                      label={guide.source}
+                      size="small"
+                      sx={{ backgroundColor: theme.palette.primary.light, color: 'white' }}
+                    />
                   </CardContent>
                 </Card>
               </Grid>
@@ -357,8 +375,12 @@ const Dashboard = () => {
                       {formatDate(query.timestamp)}
                     </Typography>
                     {query.isOffline && (
-                      <Chip label={language === 'en' ? 'Offline' : 'Ha u hokahane'}
-                        size="small" color="warning" variant="outlined" />
+                      <Chip
+                        label={language === 'en' ? 'Offline' : 'Ha u hokahane'}
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                      />
                     )}
                   </Box>
                   <Typography variant="body1" gutterBottom>
@@ -382,7 +404,9 @@ const Dashboard = () => {
           <Grid item xs={12}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography color="textSecondary">
-                {language === 'en' ? 'No queries yet. Ask Mosupisi a question!' : 'Ha ho lipotso. Botsa Mosupisi potso!'}
+                {language === 'en'
+                  ? 'No queries yet. Ask Mosupisi a question!'
+                  : 'Ha ho lipotso. Botsa Mosupisi potso!'}
               </Typography>
               <Button variant="contained" sx={{ mt: 2, minHeight: 44 }} onClick={() => navigate('/chat')}>
                 {language === 'en' ? 'Ask Question' : 'Botsa Potso'}
@@ -399,16 +423,28 @@ const Dashboard = () => {
         </Typography>
         <Grid container spacing={2}>
           <Grid item xs={4}>
-            <StatCard icon={<ChatIcon />} label={language === 'en' ? 'Queries' : 'Lipotso'}
-              value={recentQueries.length} color={theme.palette.primary.main} />
+            <StatCard
+              icon={<ChatIcon />}
+              label={language === 'en' ? 'Queries' : 'Lipotso'}
+              value={recentQueries.length}
+              color={theme.palette.primary.main}
+            />
           </Grid>
           <Grid item xs={4}>
-            <StatCard icon={<AgricultureIcon />} label={language === 'en' ? 'Crops' : 'Lijalo'}
-              value={user?.crops?.length || 0} color={theme.palette.warning.dark} />
+            <StatCard
+              icon={<AgricultureIcon />}
+              label={language === 'en' ? 'Crops' : 'Lijalo'}
+              value={user?.crops?.length || 0}
+              color={theme.palette.warning.dark}
+            />
           </Grid>
           <Grid item xs={4}>
-            <StatCard icon={<WeatherIcon />} label={language === 'en' ? 'Alerts' : 'Litemoso'}
-              value={alerts.length} color={theme.palette.error.main} />
+            <StatCard
+              icon={<WeatherIcon />}
+              label={language === 'en' ? 'Alerts' : 'Litemoso'}
+              value={alerts.length}
+              color={theme.palette.error.main}
+            />
           </Grid>
         </Grid>
       </Box>
