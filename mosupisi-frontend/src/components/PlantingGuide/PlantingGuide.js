@@ -179,31 +179,99 @@ const PlantingGuide = () => {
       .catch((err) => console.warn('PlantingGuide: weather fetch failed', err));
   }, [user]);
 
-  // Fetch per-plant weather after plantings load
+  // Fetch per-plant weather after plantings load.
+  // Strategy:
+  //   1. Deduplicate by CSIS town name (not raw location string) — Lipelaneng and
+  //      Butha-Buthe both map to the same CSIS town, so only one fetch needed.
+  //   2. Skip any town that matches the user's default location (already fetched).
+  //   3. Fetch sequentially with a 2s gap so we don't trigger CSIS 504s by
+  //      sending multiple simultaneous requests.
+  //   4. The backend cache (30min TTL) means repeat calls for the same coords
+  //      are instant cache hits — no CSIS call at all.
   useEffect(() => {
     if (!plantings.length) return;
-    const uniqueLocations = [...new Set(plantings.map(p => p.location).filter(Boolean))];
-    uniqueLocations.forEach(async (location) => {
-      const coords = _getCoordsForLocation(location);
+
+    const userLat = user?.farm_lat || -29.3167;
+    const userLon = user?.farm_lon || 27.4833;
+
+    // Build a map of CSIS town name → { coords, plantingIds[] }
+    // This deduplicates multiple plants in locations that map to the same CSIS town
+    const townMap = {};
+    plantings.forEach(p => {
+      if (!p.location || p.status === 'harvested') return;
+      const coords = _getCoordsForLocation(p.location);
       if (!coords) return;
-      try {
-        const [cur, fore] = await Promise.all([
-          weatherApi.getCurrent(coords.lat, coords.lon, coords.name),
-          weatherApi.getForecast(coords.lat, coords.lon, 3, coords.name),
-        ]);
-        // Apply to all plantings at this location
-        setPlantWeatherMap(prev => {
-          const updated = { ...prev };
-          plantings.filter(p => p.location === location).forEach(p => {
-            updated[p.id] = { weather: cur, forecast: fore, locationName: coords.name };
-          });
-          return updated;
-        });
-      } catch (err) {
-        console.warn(`PlantingGuide: weather fetch failed for ${location}:`, err.message);
+
+      // Skip if this is the same as the user's default location (already fetched above)
+      const sameAsDefault =
+        Math.abs(coords.lat - userLat) < 0.1 &&
+        Math.abs(coords.lon - userLon) < 0.1;
+      if (sameAsDefault) {
+        // Reuse liveWeather / liveForecast for this planting — set after liveWeather loads
+        return;
       }
+
+      const key = coords.name;
+      if (!townMap[key]) townMap[key] = { coords, plantingIds: [] };
+      townMap[key].plantingIds.push(p.id);
     });
-  }, [plantings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const towns = Object.values(townMap);
+    if (!towns.length) return;
+
+    // Sequential fetch with 2s gap between towns
+    const fetchSequentially = async () => {
+      for (let i = 0; i < towns.length; i++) {
+        const { coords, plantingIds } = towns[i];
+        if (i > 0) await new Promise(r => setTimeout(r, 2000)); // 2s gap
+        try {
+          const [cur, fore] = await Promise.all([
+            weatherApi.getCurrent(coords.lat, coords.lon, coords.name),
+            weatherApi.getForecast(coords.lat, coords.lon, 3, coords.name),
+          ]);
+          setPlantWeatherMap(prev => {
+            const updated = { ...prev };
+            plantingIds.forEach(id => {
+              updated[id] = { weather: cur, forecast: fore, locationName: coords.name };
+            });
+            return updated;
+          });
+        } catch (err) {
+          console.warn(`PlantingGuide: weather fetch failed for ${coords.name}:`, err.message);
+        }
+      }
+    };
+
+    fetchSequentially();
+  }, [plantings, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When liveWeather loads, apply it to any plantings whose location maps
+  // to the same CSIS town as the user's default location
+  useEffect(() => {
+    if (!liveWeather || !plantings.length) return;
+    const userLat = user?.farm_lat || -29.3167;
+    const userLon = user?.farm_lon || 27.4833;
+
+    setPlantWeatherMap(prev => {
+      const updated = { ...prev };
+      plantings.forEach(p => {
+        if (!p.location || p.status === 'harvested') return;
+        const coords = _getCoordsForLocation(p.location);
+        if (!coords) return;
+        const sameAsDefault =
+          Math.abs(coords.lat - userLat) < 0.1 &&
+          Math.abs(coords.lon - userLon) < 0.1;
+        if (sameAsDefault && !updated[p.id]) {
+          updated[p.id] = {
+            weather: liveWeather,
+            forecast: liveForecast,
+            locationName: liveWeather.location_name,
+          };
+        }
+      });
+      return updated;
+    });
+  }, [liveWeather, liveForecast, plantings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadPlantings = useCallback(async () => {
     setLoading(true);
@@ -570,11 +638,17 @@ const PlantingGuide = () => {
     const humid = weather.humidity_pct;
     const wind  = weather.wind_speed_ms;
     const rain  = weather.rainfall_mm || 0;
-    const desc  = (weather.description || '').toLowerCase();
+    const desc  = (weather.description || '').toLowerCase()
+      .replace('data from nasa power', '')
+      .replace('see nasa power data', '')
+      .trim() || 'clear sky';
 
     const isRainy    = rain > 5 || desc.includes('rain') || desc.includes('thunder') || desc.includes('shower');
     const isWindy    = wind > 8;
-    const isFrost    = temp !== null && temp <= 5;
+    // Only trigger frost if we have a real temperature reading (not NASA POWER derived midpoint)
+    // NASA POWER midpoints are often 0°C when min=-5, max=5 — use source check
+    const isNASA     = (weather.source || '').toLowerCase().includes('nasa');
+    const isFrost    = temp !== null && temp <= 5 && (!isNASA || temp <= 2);
     const isHot      = temp !== null && temp >= 35;
     const isHumid    = humid >= 85;
     const stressStage = stage === 'tasseling' || stage === 'silking' || stage === 'flowering' || stage === 'podFill' || stage === 'grainFill';

@@ -114,7 +114,7 @@ const SprayWindowBanner = ({ forecast, language }) => {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <WeatherIcon fontSize="small" sx={{ color: '#2e7d32' }} />
         <Typography variant="body2" fontWeight={700}>
-          {language === 'en' ? '🌬️ Spray Window — Next 7 Days' : '🌬️ Nako ea Ho Fifafatsa — Matsatsi a 7'}
+          {language === 'en' ? '🌬️ Spray Window (Next 7 Days)' : '🌬️ Nako ea Ho Fifafatsa (Matsatsi a 7)'}
         </Typography>
       </Box>
 
@@ -495,7 +495,7 @@ const PestControl = () => {
     try {
       await updatePestReport(reportId, { status: 'monitoring' });
       setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status: 'monitoring' } : r)));
-      setSnackbar({ open: true, message: language === 'en' ? 'Report reopened — now monitoring' : 'Tlaleho e buletstoe — e hlahlojoa', severity: 'info' });
+      setSnackbar({ open: true, message: language === 'en' ? 'Report reopened, now monitoring' : 'Tlaleho e buletstoe, e hlahlojoa', severity: 'info' });
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
     }
@@ -700,7 +700,7 @@ const PestControl = () => {
                 <CardContent>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1 }}>
                     <Box>
-                      <Typography variant="subtitle1" fontWeight={600}>{report.crop} — {report.pest_name}</Typography>
+                      <Typography variant="subtitle1" fontWeight={600}>{report.crop}: {report.pest_name}</Typography>
                       <Typography variant="caption" color="text.secondary">{report.date_observed} | {report.location}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -727,7 +727,7 @@ const PestControl = () => {
                           </IconButton>
                         </Tooltip>
                       ) : (
-                        <Tooltip title={language === 'en' ? 'Pest returned — reopen' : 'Kokonyana e khutlile — bula hape'}>
+                        <Tooltip title={language === 'en' ? 'Pest returned, reopen' : 'Kokonyana e khutlile, bula hape'}>
                           <IconButton size="small" color="warning" onClick={() => handleReopenReport(report.id)}>
                             <RestoreIcon fontSize="small" />
                           </IconButton>
@@ -953,7 +953,7 @@ const PestControl = () => {
           {language === 'en' ? '🐛 Log Pest Control Action' : '🐛 Ngola Ketso ea Taolo ea Likokonyana'}
           {selectedReport && (
             <Typography variant="caption" display="block" color="textSecondary">
-              {selectedReport.pest_name} — {selectedReport.crop} | {selectedReport.location}
+              {selectedReport.pest_name} on {selectedReport.crop} | {selectedReport.location}
             </Typography>
           )}
         </DialogTitle>
@@ -1009,7 +1009,7 @@ const PestControl = () => {
           {language === 'en' ? 'Action History' : 'Histori ea Liketso'}
           {selectedReport && (
             <Typography variant="caption" display="block" color="textSecondary">
-              {selectedReport.pest_name} — {selectedReport.crop} | {selectedReport.location}
+              {selectedReport.pest_name} on {selectedReport.crop} | {selectedReport.location}
             </Typography>
           )}
         </DialogTitle>

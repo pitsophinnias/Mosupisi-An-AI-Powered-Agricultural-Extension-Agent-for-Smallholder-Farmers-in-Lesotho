@@ -1,25 +1,18 @@
-// components/Layout/Header.js
 import React, { useState } from 'react';
 import {
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Button,
-  Box,
-  useMediaQuery,
-  Menu,
-  MenuItem,
-  Tooltip,
-  Divider
+  AppBar, Toolbar, Typography, IconButton, Button, Box,
+  useMediaQuery, Menu, MenuItem, Tooltip, Divider, Avatar
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import LanguageIcon from '@mui/icons-material/Language';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import LogoutIcon from '@mui/icons-material/Logout';
+import PersonIcon from '@mui/icons-material/Person';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 
 const Header = ({ handleDrawerToggle }) => {
   const theme = useTheme();
@@ -27,17 +20,17 @@ const Header = ({ handleDrawerToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, language, toggleLanguage } = useLanguage();
-  
-  const [anchorEl, setAnchorEl] = useState(null);
-  const open = Boolean(anchorEl);
+  const { user, logout, isAuthenticated } = useAuth();
 
-  const handleLanguageClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
+  const [langAnchorEl, setLangAnchorEl] = useState(null);
+  const [userAnchorEl, setUserAnchorEl] = useState(null);
+  const langOpen = Boolean(langAnchorEl);
+  const userOpen = Boolean(userAnchorEl);
 
-  const handleLanguageClose = () => {
-    setAnchorEl(null);
-  };
+  const handleLanguageClick = (e) => setLangAnchorEl(e.currentTarget);
+  const handleLanguageClose = () => setLangAnchorEl(null);
+  const handleUserClick = (e) => setUserAnchorEl(e.currentTarget);
+  const handleUserClose = () => setUserAnchorEl(null);
 
   const handleLanguageChange = (lang) => {
     if ((lang === 'en' && language !== 'en') || (lang === 'st' && language !== 'st')) {
@@ -46,13 +39,18 @@ const Header = ({ handleDrawerToggle }) => {
     handleLanguageClose();
   };
 
+  const handleLogout = () => {
+    handleUserClose();
+    logout();
+    navigate('/login');
+  };
+
   const menuItems = [
     { text: t('nav.dashboard'), path: '/' },
     { text: t('nav.chat'), path: '/chat' },
     { text: t('nav.planting'), path: '/planting-guide', icon: <AgricultureIcon /> },
     { text: t('nav.pest'), path: '/pest-control', icon: <BugReportIcon /> },
     { text: t('nav.weather'), path: '/weather' },
-    { text: t('nav.profile'), path: '/profile' }
   ];
 
   return (
@@ -67,14 +65,8 @@ const Header = ({ handleDrawerToggle }) => {
         {/* Mobile Menu Button */}
         {!isDesktop && (
           <IconButton
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ 
-              mr: 2,
-              minHeight: 44,
-              minWidth: 44
-            }}
+            color="inherit" edge="start" onClick={handleDrawerToggle}
+            sx={{ mr: 2, minHeight: 44, minWidth: 44 }}
             aria-label="menu"
           >
             <MenuIcon />
@@ -84,17 +76,13 @@ const Header = ({ handleDrawerToggle }) => {
         {/* Brand */}
         <Typography
           variant="h6"
-          sx={{ 
-            flexGrow: 1, 
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            cursor: 'pointer'
+          sx={{
+            flexGrow: 1, fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer'
           }}
           onClick={() => navigate('/')}
         >
-          <span role="img" aria-label="sprout">🌱</span> 
+          <span role="img" aria-label="sprout">🌱</span>
           {t('app.name')}
         </Typography>
 
@@ -109,150 +97,132 @@ const Header = ({ handleDrawerToggle }) => {
                 sx={{
                   color: 'white',
                   fontWeight: location.pathname === item.path ? 600 : 400,
-                  borderBottom: location.pathname === item.path
-                    ? '2px solid white'
-                    : 'none',
-                  borderRadius: 0,
-                  mx: 0.5,
-                  minHeight: 44,
-                  minWidth: 44,
-                  px: 1.5,
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)'
-                  }
+                  borderBottom: location.pathname === item.path ? '2px solid white' : 'none',
+                  borderRadius: 0, mx: 0.5, minHeight: 44, px: 1.5,
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' }
                 }}
               >
                 {item.text}
               </Button>
             ))}
 
-            {/* Language Toggle Button - Desktop */}
+            {/* Language Toggle */}
             <Tooltip title={language === 'en' ? 'Sesotho' : 'English'}>
               <Button
                 onClick={handleLanguageClick}
                 startIcon={<LanguageIcon />}
                 sx={{
-                  color: 'white',
-                  ml: 1,
+                  color: 'white', ml: 1,
                   border: '1px solid rgba(255,255,255,0.3)',
-                  borderRadius: 2,
-                  minHeight: 44,
-                  minWidth: 44,
-                  px: 2,
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    borderColor: 'white'
-                  }
+                  borderRadius: 2, minHeight: 44, px: 2,
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'white' }
                 }}
               >
                 {language === 'en' ? 'Sesotho' : 'English'}
               </Button>
             </Tooltip>
+
+            {/* User Avatar + Menu */}
+            {isAuthenticated && (
+              <Tooltip title={user?.name || 'Account'}>
+                <IconButton onClick={handleUserClick} sx={{ ml: 1 }}>
+                  <Avatar
+                    sx={{
+                      width: 36, height: 36,
+                      bgcolor: 'rgba(255,255,255,0.25)',
+                      color: 'white', fontSize: '1rem', fontWeight: 600,
+                      border: '2px solid rgba(255,255,255,0.4)'
+                    }}
+                  >
+                    {user?.name?.charAt(0)?.toUpperCase() || 'F'}
+                  </Avatar>
+                </IconButton>
+              </Tooltip>
+            )}
           </Box>
         )}
 
-        {/* Mobile Language Button */}
+        {/* Mobile: Language + Avatar */}
         {!isDesktop && (
-          <IconButton
-            color="inherit"
-            onClick={handleLanguageClick}
-            sx={{
-              border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: 2,
-              minHeight: 44,
-              minWidth: 44
-            }}
-            aria-label="change language"
-          >
-            <LanguageIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton
+              color="inherit" onClick={handleLanguageClick}
+              sx={{ border: '1px solid rgba(255,255,255,0.3)', borderRadius: 2, minHeight: 44, minWidth: 44 }}
+            >
+              <LanguageIcon />
+            </IconButton>
+
+            {isAuthenticated && (
+              <IconButton onClick={handleUserClick} sx={{ p: 0.5 }}>
+                <Avatar
+                  sx={{
+                    width: 34, height: 34,
+                    bgcolor: 'rgba(255,255,255,0.25)',
+                    color: 'white', fontSize: '0.9rem', fontWeight: 600,
+                    border: '2px solid rgba(255,255,255,0.4)'
+                  }}
+                >
+                  {user?.name?.charAt(0)?.toUpperCase() || 'F'}
+                </Avatar>
+              </IconButton>
+            )}
+          </Box>
         )}
 
-        {/* Language Selection Menu */}
+        {/* Language Menu */}
         <Menu
-          anchorEl={anchorEl}
-          open={open}
-          onClose={handleLanguageClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-          PaperProps={{
-            sx: {
-              mt: 1,
-              minWidth: 150,
-              borderRadius: 2,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-            }
-          }}
+          anchorEl={langAnchorEl} open={langOpen} onClose={handleLanguageClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          PaperProps={{ sx: { mt: 1, minWidth: 150, borderRadius: 2 } }}
         >
-          <MenuItem 
-            onClick={() => handleLanguageChange('en')}
-            selected={language === 'en'}
-            sx={{
-              minHeight: 44,
-              py: 1,
-              '&.Mui-selected': {
-                backgroundColor: 'rgba(15, 61, 46, 0.08)',
-                '&:hover': {
-                  backgroundColor: 'rgba(15, 61, 46, 0.12)',
-                }
-              }
-            }}
+          <MenuItem
+            onClick={() => handleLanguageChange('en')} selected={language === 'en'}
+            sx={{ minHeight: 44 }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <span>🇬🇧</span>
               <Typography>English</Typography>
-              {language === 'en' && (
-                <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>
-                  ✓
-                </Typography>
-              )}
+              {language === 'en' && <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>✓</Typography>}
             </Box>
           </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleLanguageChange('st')}
-            selected={language === 'st'}
-            sx={{
-              minHeight: 44,
-              py: 1,
-              '&.Mui-selected': {
-                backgroundColor: 'rgba(15, 61, 46, 0.08)',
-                '&:hover': {
-                  backgroundColor: 'rgba(15, 61, 46, 0.12)',
-                }
-              }
-            }}
+          <MenuItem
+            onClick={() => handleLanguageChange('st')} selected={language === 'st'}
+            sx={{ minHeight: 44 }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <span>🇱🇸</span>
               <Typography>Sesotho</Typography>
-              {language === 'st' && (
-                <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>
-                  ✓
-                </Typography>
-              )}
+              {language === 'st' && <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>✓</Typography>}
             </Box>
           </MenuItem>
-          
-          <Divider sx={{ my: 0.5 }} />
-          
-          <MenuItem 
-            onClick={handleLanguageClose}
-            sx={{ 
-              minHeight: 44,
-              color: 'text.secondary',
-              fontSize: '0.875rem'
-            }}
-          >
-            <Typography variant="caption" sx={{ width: '100%', textAlign: 'center' }}>
-              {language === 'en' ? 'Language changed to Sesotho' : 'Puo e fetotsoe ho English'}
+        </Menu>
+
+        {/* User Menu */}
+        <Menu
+          anchorEl={userAnchorEl} open={userOpen} onClose={handleUserClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          PaperProps={{ sx: { mt: 1, minWidth: 180, borderRadius: 2 } }}
+        >
+          {/* User info header */}
+          <Box sx={{ px: 2, py: 1.5 }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              {user?.name}
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {user?.mobile}
+            </Typography>
+          </Box>
+          <Divider />
+          <MenuItem onClick={() => { handleUserClose(); navigate('/profile'); }} sx={{ minHeight: 44, gap: 1.5 }}>
+            <PersonIcon fontSize="small" color="action" />
+            <Typography>{language === 'en' ? 'My Profile' : 'Boitsebiso baka'}</Typography>
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={handleLogout} sx={{ minHeight: 44, gap: 1.5, color: 'error.main' }}>
+            <LogoutIcon fontSize="small" />
+            <Typography>{language === 'en' ? 'Log Out' : 'Tsoa'}</Typography>
           </MenuItem>
         </Menu>
       </Toolbar>
