@@ -207,8 +207,8 @@ const WeatherAlerts = () => {
         }}>
           <Typography variant="h6" gutterBottom sx={{ opacity: 0.85 }}>
             {language === 'en'
-              ? `Current Conditions — ${DEFAULT_NAME}`
-              : `Maemo a Joale — ${DEFAULT_NAME}`}
+              ? `Current Conditions : ${DEFAULT_NAME}`
+              : `Maemo a Joale : ${DEFAULT_NAME}`}
           </Typography>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} sm={4} sx={{ textAlign: 'center' }}>
