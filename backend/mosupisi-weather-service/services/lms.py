@@ -31,7 +31,7 @@ Nearest-city logic:
 import logging
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
@@ -45,11 +45,22 @@ from models.schemas import (
 
 logger = logging.getLogger(__name__)
 
-CSIS_URL     = os.getenv("LMS_API_URL", "https://share.csis.gov.ls/api/forecasts")
+CSIS_URL      = os.getenv("LMS_API_URL", "https://share.csis.gov.ls/api/forecasts")
 LMS_STUB_MODE = os.getenv("LMS_STUB_MODE", "true").lower() == "true"
 
+# Lesotho is CAT = UTC+2
+CAT = timezone(timedelta(hours=2))
+
+# Module-level cache shared across all LMSClient instances within the same process.
+# One CSIS fetch covers all 13 towns — no need to fetch again for Butha-Buthe
+# if Maseru was already fetched in the same process within the TTL window.
+_CSIS_CACHE: dict = {
+    "data":       [],
+    "fetched_at": 0.0,
+    "ttl":        30 * 60,   # 30 minutes
+}
+
 # ── All 13 CSIS towns with coordinates ────────────────────────────────────────
-# Used for nearest-city lookup when farmer lat/lon is provided.
 CSIS_TOWNS = [
     {"slug": "butha-buthe",   "name": "Butha-Buthe",   "lat": -28.76, "lon": 28.27},
     {"slug": "leribe",        "name": "Leribe",         "lat": -28.88, "lon": 28.07},
@@ -67,8 +78,6 @@ CSIS_TOWNS = [
 ]
 
 # ── Rainfall estimates from condition slug ─────────────────────────────────────
-# CSIS does not provide rainfall_mm — we derive a reasonable estimate
-# from the condition slug so alert thresholds and RAG context still work.
 RAIN_MM = {
     "clearsky_day":         0.0,
     "clearsky_night":       0.0,
@@ -128,7 +137,7 @@ class LMSClient:
 
     def __init__(self):
         self.stub    = LMS_STUB_MODE
-        self.timeout = httpx.Timeout(90.0)   # CSIS response is ~1.3MB and can be slow
+        self.timeout = httpx.Timeout(90.0)
 
         if self.stub:
             logger.info(
@@ -151,9 +160,18 @@ class LMSClient:
     ) -> Optional[CurrentWeather]:
         """
         Return current conditions for the CSIS town nearest to the given
-        coordinates. Uses the midnight snapshot (effective_period_time 00:00:00)
-        of today's forecast as the best available proxy for current conditions.
-        Returns None in stub mode so the aggregator falls back to OWM.
+        coordinates.
+
+        Strategy:
+          1. Prefer the midnight snapshot (effective_period_time "00:00:00")
+             as the best proxy for current conditions.
+          2. If midnight snapshot is absent (CSIS sometimes omits it),
+             fall back to any available snapshot for today.
+          3. Uses CAT (UTC+2) for date comparison — avoids UTC offset
+             causing today's data to appear as tomorrow before 02:00 UTC.
+
+        Returns None if no data found so the aggregator falls back to
+        NASA POWER.
         """
         if self.stub:
             return None
@@ -170,36 +188,52 @@ class LMSClient:
             logger.error(f"CSIS fetch failed: {e}")
             return None
 
-        # Find today's midnight snapshot for our town
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        # Use CAT time so we match CSIS date strings correctly
+        today = datetime.now(CAT).strftime("%Y-%m-%d")
+
+        # Collect all snapshots for today for our town
+        candidates = []
         for collection in collections:
             coll_date = collection.get("date", "")[:10]
             if coll_date != today:
                 continue
             for feature in collection.get("features", []):
                 props = feature.get("properties", {})
-                if props.get("effective_period_time") != "00:00:00":
-                    continue
                 if props.get("city_slug") != town["slug"]:
                     continue
+                candidates.append(props)
 
-                return CurrentWeather(
-                    latitude          = latitude,
-                    longitude         = longitude,
-                    location_name     = location_name or town["name"],
-                    temperature_c     = float(props.get("air_temperature_max", 20.0)),
-                    feels_like_c      = None,
-                    humidity_pct      = float(props.get("relative_humidity", 0.0)),
-                    wind_speed_ms     = _kmh_to_ms(float(props.get("wind_speed", 0.0))),
-                    wind_direction_deg = None,
-                    rainfall_mm       = _rainfall_from_condition(props.get("condition", "")),
-                    cloud_cover_pct   = None,
-                    description       = props.get("condition_label", ""),
-                    source            = WeatherSource.LMS,
-                )
+        if not candidates:
+            logger.warning(
+                f"CSIS: no snapshot at all found for {town['name']} on {today}"
+            )
+            return None
 
-        logger.warning(f"CSIS: no midnight snapshot found for {town['name']} on {today}")
-        return None
+        # Prefer midnight snapshot, fall back to earliest available
+        props = next(
+            (p for p in candidates if p.get("effective_period_time") == "00:00:00"),
+            candidates[0],
+        )
+
+        logger.info(
+            f"CSIS: using snapshot time={props.get('effective_period_time')} "
+            f"for {town['name']} on {today}"
+        )
+
+        return CurrentWeather(
+            latitude           = latitude,
+            longitude          = longitude,
+            location_name      = location_name or town["name"],
+            temperature_c      = float(props.get("air_temperature_max", 20.0)),
+            feels_like_c       = None,
+            humidity_pct       = float(props.get("relative_humidity", 0.0)),
+            wind_speed_ms      = _kmh_to_ms(float(props.get("wind_speed", 0.0))),
+            wind_direction_deg = None,
+            rainfall_mm        = _rainfall_from_condition(props.get("condition", "")),
+            cloud_cover_pct    = None,
+            description        = props.get("condition_label", ""),
+            source             = WeatherSource.LMS,
+        )
 
     async def get_forecast(
         self,
@@ -210,9 +244,15 @@ class LMSClient:
     ) -> Optional[WeatherForecast]:
         """
         Return a multi-day daily forecast for the CSIS town nearest to
-        the given coordinates. Uses whole-day slots (effective_period_time 00:01:00).
+        the given coordinates.
+
+        Uses whole-day slots (effective_period_time "00:01:00").
         CSIS provides up to ~16 days. Days parameter is capped at 16.
-        Returns None in stub mode.
+
+        Uses CAT (UTC+2) for today's date so past dates are correctly
+        excluded regardless of server time zone.
+
+        Returns None in stub mode or if no data found.
         """
         if self.stub:
             return None
@@ -230,8 +270,10 @@ class LMSClient:
             logger.error(f"CSIS fetch failed: {e}")
             return None
 
-        # Collect whole-day entries for our town, sorted by date, today onwards only
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        # Use CAT time so today's date matches CSIS date strings
+        today = datetime.now(CAT).strftime("%Y-%m-%d")
+
+        # Collect whole-day entries for our town, sorted by date, today onwards
         daily: dict[str, DailyForecast] = {}
         for collection in collections:
             for feature in collection.get("features", []):
@@ -242,10 +284,10 @@ class LMSClient:
                 if props.get("city_slug") != town["slug"]:
                     continue
 
-                date_str = props.get("date", "")[:10]   # "2026-04-10"
+                date_str = props.get("date", "")[:10]
                 if not date_str or date_str in daily:
                     continue
-                if date_str < today:                     # skip past dates
+                if date_str < today:
                     continue
 
                 daily[date_str] = DailyForecast(
@@ -263,6 +305,11 @@ class LMSClient:
         if not sorted_days:
             logger.warning(f"CSIS: no whole-day forecast found for {town['name']}")
             return None
+
+        logger.info(
+            f"CSIS: returning {len(sorted_days)} forecast days for "
+            f"{location_name or town['name']}"
+        )
 
         return WeatherForecast(
             latitude      = latitude,
@@ -287,21 +334,21 @@ class LMSClient:
 
     async def _fetch_all(self) -> list:
         """
-        Fetch the full CSIS forecast array.
+        Fetch the full CSIS forecast array, using module-level cache when fresh.
 
-        The CSIS server performs double SSL renegotiation which stalls
-        httpx's default SSL handling. We work around this by:
-          1. Using a permissive SSL context that tolerates renegotiation
-          2. Setting a User-Agent matching a browser (server may block Python agents)
-          3. Retrying once on timeout
+        One CSIS call returns all 13 towns × 16 days. The module-level cache
+        means all LMSClient instances within the same process share one copy
+        of the data — requests for Maseru, Butha-Buthe and Semonkong all reuse
+        the same fetch without hitting CSIS again.
         """
-        import ssl
+        import time
 
-        # Build a permissive SSL context that handles server-side renegotiation
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-        ssl_ctx.options |= ssl.OP_LEGACY_SERVER_CONNECT  # allow renegotiation
+        age = time.time() - _CSIS_CACHE["fetched_at"]
+        if _CSIS_CACHE["data"] and age < _CSIS_CACHE["ttl"]:
+            logger.info(
+                f"CSIS module cache hit (age {int(age)}s / TTL {int(_CSIS_CACHE['ttl'])}s)"
+            )
+            return _CSIS_CACHE["data"]
 
         headers = {
             "User-Agent": (
@@ -318,15 +365,22 @@ class LMSClient:
                 logger.info(f"CSIS fetch attempt {attempt + 1}/2 from {CSIS_URL}")
                 async with httpx.AsyncClient(
                     timeout=self.timeout,
-                    verify=False,          # skip cert verification (handles renegotiation)
+                    verify=False,
                     follow_redirects=True,
                     headers=headers,
                 ) as client:
                     r = await client.get(CSIS_URL)
                     r.raise_for_status()
                     data = r.json()
-                logger.info(f"CSIS: fetched {len(data)} FeatureCollections")
+
+                _CSIS_CACHE["data"]       = data
+                _CSIS_CACHE["fetched_at"] = time.time()
+                logger.info(
+                    f"CSIS: fetched {len(data)} FeatureCollections "
+                    f"— cached for {int(_CSIS_CACHE['ttl'] // 60)} minutes"
+                )
                 return data
+
             except httpx.TimeoutException as e:
                 logger.warning(f"CSIS timeout on attempt {attempt + 1}/2: {e}")
                 if attempt == 1:
