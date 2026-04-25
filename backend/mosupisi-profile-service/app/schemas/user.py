@@ -12,6 +12,7 @@ class UserProfileResponse(BaseModel):
     role: str
     is_active: bool
     onboarding_complete: bool
+    avatar_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
