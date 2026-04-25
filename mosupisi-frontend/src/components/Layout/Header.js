@@ -4,7 +4,7 @@ import {
   useMediaQuery, Menu, MenuItem, Tooltip, Divider, Avatar
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import LanguageIcon from '@mui/icons-material/Language';
+import TranslateIcon from '@mui/icons-material/Translate';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -113,7 +113,7 @@ const Header = ({ handleDrawerToggle }) => {
             <Tooltip title={language === 'en' ? 'Switch to Sesotho' : 'Fetola ho Sesotho'}>
               <Button
                 onClick={handleLanguageClick}
-                startIcon={<LanguageIcon sx={{ fontSize: '16px !important' }} />}
+                startIcon={<TranslateIcon sx={{ fontSize: '16px !important' }} />}
                 sx={{
                   color: 'white',
                   ml: 1,
@@ -163,12 +163,12 @@ const Header = ({ handleDrawerToggle }) => {
               sx={{
                 border: '1px solid rgba(255,255,255,0.3)',
                 borderRadius: 2,
-                width: 36,
-                height: 36,
+                width: 30,
+                height: 30,
                 padding: 0,
               }}
             >
-              <LanguageIcon sx={{ fontSize: 18 }} />
+              <TranslateIcon sx={{ fontSize: 14 }} />
             </IconButton>
 
             {isAuthenticated && (
