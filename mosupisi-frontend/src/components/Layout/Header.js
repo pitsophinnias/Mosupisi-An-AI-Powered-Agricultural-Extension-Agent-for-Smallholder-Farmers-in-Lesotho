@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   AppBar, Toolbar, Typography, IconButton, Button, Box,
-  useMediaQuery, Menu, MenuItem, Tooltip, Divider, Avatar
+  useMediaQuery, Menu, MenuItem, Tooltip, Divider, Avatar,
+  Badge, Popover,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import TranslateIcon from '@mui/icons-material/Translate';
@@ -12,10 +13,13 @@ import PersonIcon from '@mui/icons-material/Person';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ChatIcon from '@mui/icons-material/Chat';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
+import NotificationPanel from '../Notifications/NotificationPanel';
 
 const PROFILE_SERVICE_URL = process.env.REACT_APP_PROFILE_SERVICE_URL || 'http://localhost:8003';
 
@@ -26,16 +30,22 @@ const Header = ({ handleDrawerToggle }) => {
   const location = useLocation();
   const { t, language, toggleLanguage } = useLanguage();
   const { user, logout, isAuthenticated } = useAuth();
+  const { unreadCount } = useNotifications();
 
-  const [langAnchorEl, setLangAnchorEl] = useState(null);
-  const [userAnchorEl, setUserAnchorEl] = useState(null);
-  const langOpen = Boolean(langAnchorEl);
-  const userOpen = Boolean(userAnchorEl);
+  const [langAnchorEl, setLangAnchorEl]   = useState(null);
+  const [userAnchorEl, setUserAnchorEl]   = useState(null);
+  const [notifAnchorEl, setNotifAnchorEl] = useState(null);
+
+  const langOpen  = Boolean(langAnchorEl);
+  const userOpen  = Boolean(userAnchorEl);
+  const notifOpen = Boolean(notifAnchorEl);
 
   const handleLanguageClick = (e) => setLangAnchorEl(e.currentTarget);
   const handleLanguageClose = () => setLangAnchorEl(null);
-  const handleUserClick = (e) => setUserAnchorEl(e.currentTarget);
-  const handleUserClose = () => setUserAnchorEl(null);
+  const handleUserClick     = (e) => setUserAnchorEl(e.currentTarget);
+  const handleUserClose     = () => setUserAnchorEl(null);
+  const handleNotifClick    = (e) => setNotifAnchorEl(e.currentTarget);
+  const handleNotifClose    = () => setNotifAnchorEl(null);
 
   const handleLanguageChange = (lang) => {
     if ((lang === 'en' && language !== 'en') || (lang === 'st' && language !== 'st')) {
@@ -131,10 +141,30 @@ const Header = ({ handleDrawerToggle }) => {
               </Button>
             </Tooltip>
 
+            {/* Bell icon — authenticated only */}
+            {isAuthenticated && (
+              <Tooltip title={language === 'en' ? 'Notifications' : 'Litemoso'}>
+                <IconButton onClick={handleNotifClick} sx={{ ml: 0.5, color: 'white' }}>
+                  <Badge
+                    badgeContent={unreadCount}
+                    max={99}
+                    color="error"
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        fontSize: '0.6rem', minWidth: 16, height: 16,
+                      }
+                    }}
+                  >
+                    <NotificationsIcon sx={{ fontSize: 22 }} />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            )}
+
             {/* User avatar — authenticated only */}
             {isAuthenticated && (
               <Tooltip title={user?.name || 'Account'}>
-                <IconButton onClick={handleUserClick} sx={{ ml: 1 }}>
+                <IconButton onClick={handleUserClick} sx={{ ml: 0.5 }}>
                   <Avatar
                     src={user?.avatar_url ? `${PROFILE_SERVICE_URL}${user.avatar_url}` : undefined}
                     sx={{
@@ -156,7 +186,7 @@ const Header = ({ handleDrawerToggle }) => {
         {!isDesktop && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
 
-            {/* Language toggle — always visible */}
+            {/* Language toggle */}
             <IconButton
               color="inherit" onClick={handleLanguageClick}
               sx={{
@@ -166,6 +196,20 @@ const Header = ({ handleDrawerToggle }) => {
             >
               <TranslateIcon sx={{ fontSize: 16 }} />
             </IconButton>
+
+            {/* Bell — authenticated only */}
+            {isAuthenticated && (
+              <IconButton onClick={handleNotifClick} sx={{ color: 'white', p: 0.5 }}>
+                <Badge
+                  badgeContent={unreadCount}
+                  max={99}
+                  color="error"
+                  sx={{ '& .MuiBadge-badge': { fontSize: '0.6rem', minWidth: 16, height: 16 } }}
+                >
+                  <NotificationsIcon sx={{ fontSize: 20 }} />
+                </Badge>
+              </IconButton>
+            )}
 
             {/* User avatar — authenticated only */}
             {isAuthenticated && (
@@ -193,33 +237,39 @@ const Header = ({ handleDrawerToggle }) => {
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
           PaperProps={{ sx: { mt: 1, minWidth: 150, borderRadius: 2 } }}
         >
-          <MenuItem
-            onClick={() => handleLanguageChange('en')}
-            selected={language === 'en'}
-            sx={{ minHeight: 44 }}
-          >
+          <MenuItem onClick={() => handleLanguageChange('en')} selected={language === 'en'} sx={{ minHeight: 44 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <span>🇬🇧</span>
               <Typography>English</Typography>
-              {language === 'en' && (
-                <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>✓</Typography>
-              )}
+              {language === 'en' && <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>✓</Typography>}
             </Box>
           </MenuItem>
-          <MenuItem
-            onClick={() => handleLanguageChange('st')}
-            selected={language === 'st'}
-            sx={{ minHeight: 44 }}
-          >
+          <MenuItem onClick={() => handleLanguageChange('st')} selected={language === 'st'} sx={{ minHeight: 44 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <span>🇱🇸</span>
               <Typography>Sesotho</Typography>
-              {language === 'st' && (
-                <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>✓</Typography>
-              )}
+              {language === 'st' && <Typography variant="caption" sx={{ ml: 'auto', color: '#4CAF50' }}>✓</Typography>}
             </Box>
           </MenuItem>
         </Menu>
+
+        {/* ── Notification popover ── */}
+        <Popover
+          open={notifOpen}
+          anchorEl={notifAnchorEl}
+          onClose={handleNotifClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          PaperProps={{
+            sx: {
+              mt: 1, borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+              overflow: 'hidden',
+            }
+          }}
+        >
+          <NotificationPanel onClose={handleNotifClose} />
+        </Popover>
 
         {/* ── User menu ── */}
         <Menu
@@ -239,6 +289,18 @@ const Header = ({ handleDrawerToggle }) => {
           >
             <PersonIcon fontSize="small" color="action" />
             <Typography>{language === 'en' ? 'My Profile' : 'Boitsebiso baka'}</Typography>
+          </MenuItem>
+          <MenuItem
+            onClick={() => { handleUserClose(); navigate('/notifications'); }}
+            sx={{ minHeight: 44, gap: 1.5 }}
+          >
+            <NotificationsIcon fontSize="small" color="action" />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography>{language === 'en' ? 'Notifications' : 'Litemoso'}</Typography>
+              {unreadCount > 0 && (
+                <Badge badgeContent={unreadCount} color="error" max={99} />
+              )}
+            </Box>
           </MenuItem>
           <Divider />
           <MenuItem onClick={handleLogout} sx={{ minHeight: 44, gap: 1.5, color: 'error.main' }}>

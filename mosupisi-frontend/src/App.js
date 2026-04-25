@@ -14,6 +14,7 @@ import WeatherAlerts from './components/Weather/WeatherAlerts';
 import OfflineBanner from './components/Common/OfflineBanner';
 import PlantingGuide from './components/PlantingGuide/PlantingGuide';
 import PestControl from './components/PestControl/PestControl';
+import NotificationsPage from './components/Notifications/NotificationsPage';
 import { Box, CssBaseline, Toolbar, CircularProgress } from '@mui/material';
 
 function App() {
@@ -69,15 +70,18 @@ function App() {
         <OfflineBanner />
 
         <Routes>
+          {/* Public */}
           <Route path="/login"    element={!isAuthenticated ? <Login />    : <Navigate to="/" replace />} />
           <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" replace />} />
 
-          <Route path="/"              element={isAuthenticated ? <Dashboard />    : <Navigate to="/login" replace />} />
-          <Route path="/chat"          element={isAuthenticated ? <ChatInterface /> : <Navigate to="/login" replace />} />
-          <Route path="/profile"       element={isAuthenticated ? <Profile />      : <Navigate to="/login" replace />} />
-          <Route path="/weather"       element={isAuthenticated ? <WeatherAlerts /> : <Navigate to="/login" replace />} />
-          <Route path="/planting-guide" element={isAuthenticated ? <PlantingGuide /> : <Navigate to="/login" replace />} />
-          <Route path="/pest-control"  element={isAuthenticated ? <PestControl />  : <Navigate to="/login" replace />} />
+          {/* Protected */}
+          <Route path="/"               element={isAuthenticated ? <Dashboard />       : <Navigate to="/login" replace />} />
+          <Route path="/chat"           element={isAuthenticated ? <ChatInterface />    : <Navigate to="/login" replace />} />
+          <Route path="/profile"        element={isAuthenticated ? <Profile />         : <Navigate to="/login" replace />} />
+          <Route path="/weather"        element={isAuthenticated ? <WeatherAlerts />   : <Navigate to="/login" replace />} />
+          <Route path="/planting-guide" element={isAuthenticated ? <PlantingGuide />   : <Navigate to="/login" replace />} />
+          <Route path="/pest-control"   element={isAuthenticated ? <PestControl />     : <Navigate to="/login" replace />} />
+          <Route path="/notifications"  element={isAuthenticated ? <NotificationsPage /> : <Navigate to="/login" replace />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
