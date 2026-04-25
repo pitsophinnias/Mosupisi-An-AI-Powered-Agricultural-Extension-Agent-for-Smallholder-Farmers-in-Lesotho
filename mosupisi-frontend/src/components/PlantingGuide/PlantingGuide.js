@@ -159,7 +159,7 @@ const PlantingGuide = () => {
     const key = locationStr.toLowerCase().trim();
     // Exact match first
     if (LESOTHO_COORDS[key]) return LESOTHO_COORDS[key];
-    // Partial match — check if any known town name is contained in the location string
+    // Partial match : check if any known town name is contained in the location string
     for (const [town, coords] of Object.entries(LESOTHO_COORDS)) {
       if (key.includes(town) || town.includes(key)) return coords;
     }
@@ -181,13 +181,13 @@ const PlantingGuide = () => {
 
   // Fetch per-plant weather after plantings load.
   // Strategy:
-  //   1. Deduplicate by CSIS town name (not raw location string) — Lipelaneng and
+  //   1. Deduplicate by CSIS town name (not raw location string) : Lipelaneng and
   //      Butha-Buthe both map to the same CSIS town, so only one fetch needed.
   //   2. Skip any town that matches the user's default location (already fetched).
   //   3. Fetch sequentially with a 2s gap so we don't trigger CSIS 504s by
   //      sending multiple simultaneous requests.
   //   4. The backend cache (30min TTL) means repeat calls for the same coords
-  //      are instant cache hits — no CSIS call at all.
+  //      are instant cache hits : no CSIS call at all.
   useEffect(() => {
     if (!plantings.length) return;
 
@@ -207,7 +207,7 @@ const PlantingGuide = () => {
         Math.abs(coords.lat - userLat) < 0.1 &&
         Math.abs(coords.lon - userLon) < 0.1;
       if (sameAsDefault) {
-        // Reuse liveWeather / liveForecast for this planting — set after liveWeather loads
+        // Reuse liveWeather / liveForecast for this planting : set after liveWeather loads
         return;
       }
 
@@ -435,7 +435,7 @@ const PlantingGuide = () => {
   };
 
   const handleOpenActionDialog = (planting) => {
-    // Simple open — no history loading here (history is in separate dialog)
+    // Simple open : no history loading here (history is in separate dialog)
     setSelectedPlanting(planting);
     setActionAdvice(null);
     setActionText('');
@@ -630,7 +630,7 @@ const PlantingGuide = () => {
 
   // ── WeatherAdviceStrip ────────────────────────────────────────────────────
   // Generates instant rule-based weather advice for a specific crop + stage
-  // using the live weather data already fetched. No API call — pure logic.
+  // using the live weather data already fetched. No API call : pure logic.
   const getWeatherAdvice = (crop, stage, weather, forecast) => {
     if (!weather) return null;
 
@@ -646,7 +646,7 @@ const PlantingGuide = () => {
     const isRainy    = rain > 5 || desc.includes('rain') || desc.includes('thunder') || desc.includes('shower');
     const isWindy    = wind > 8;
     // Only trigger frost if we have a real temperature reading (not NASA POWER derived midpoint)
-    // NASA POWER midpoints are often 0°C when min=-5, max=5 — use source check
+    // NASA POWER midpoints are often 0°C when min=-5, max=5 : use source check
     const isNASA     = (weather.source || '').toLowerCase().includes('nasa');
     const isFrost    = temp !== null && temp <= 5 && (!isNASA || temp <= 2);
     const isHot      = temp !== null && temp >= 35;
@@ -655,15 +655,15 @@ const PlantingGuide = () => {
 
     const alerts = [];
 
-    // Rain advice — context of watering and field work
+    // Rain advice : context of watering and field work
     if (isRainy) {
       alerts.push({ icon: '🌧️', color: '#1565c0', bg: '#e3f2fd',
-        en: `Rain today — no need to irrigate. Hold off on foliar feeding until leaves are dry.`,
-        st: `Pula kajeno — ha ho hlokahale ho nosetsa. Letha ho atiha ha makhasi pele o sebelisa manyolo.` });
+        en: `Rain today : no need to irrigate. Hold off on foliar feeding until leaves are dry.`,
+        st: `Pula kajeno : ha ho hlokahale ho nosetsa. Letha ho atiha ha makhasi pele o sebelisa manyolo.` });
     } else if (isWindy) {
       alerts.push({ icon: '💨', color: '#e65100', bg: '#fff3e0',
-        en: `Wind at ${wind.toFixed(1)} m/s — avoid foliar feeding today, apply when wind drops below 5 m/s.`,
-        st: `Moea o phahameng (${wind.toFixed(1)} m/s) — emit'a ho sebelisa manyolo a makhasi kajeno.` });
+        en: `Wind at ${wind.toFixed(1)} m/s : avoid foliar feeding today, apply when wind drops below 5 m/s.`,
+        st: `Moea o phahameng (${wind.toFixed(1)} m/s) : emit'a ho sebelisa manyolo a makhasi kajeno.` });
     } else {
       alerts.push({ icon: '✅', color: '#2e7d32', bg: '#e8f5e9',
         en: `Good conditions for foliar feeding or irrigation today (${desc || 'clear'}, ${wind?.toFixed(1)} m/s wind).`,
@@ -673,29 +673,29 @@ const PlantingGuide = () => {
     // Frost risk
     if (isFrost) {
       alerts.push({ icon: '🥶', color: '#1565c0', bg: '#e3f2fd',
-        en: `Frost risk at ${temp}°C tonight — cover ${crop} seedlings or young plants if possible.`,
-        st: `Kotsing ea shelwe ha ${temp}°C — ко${crop} e nyane bosiu haeba ho khoneha.` });
+        en: `Frost risk at ${temp}°C tonight : cover ${crop} seedlings or young plants if possible.`,
+        st: `Kotsing ea shelwe ha ${temp}°C : ко${crop} e nyane bosiu haeba ho khoneha.` });
     }
 
     // Heat stress at critical stages
     if (isHot && stressStage) {
       alerts.push({ icon: '🌡️', color: '#c62828', bg: '#ffebee',
-        en: `${temp}°C during ${stage} — ${crop} needs water urgently. Irrigate early morning before 8am.`,
-        st: `${temp}°C nakong ea ${stage} — ${crop} e hloka metsi ka potlako. Nosetsa hoseng pele ha 8am.` });
+        en: `${temp}°C during ${stage} : ${crop} needs water urgently. Irrigate early morning before 8am.`,
+        st: `${temp}°C nakong ea ${stage} : ${crop} e hloka metsi ka potlako. Nosetsa hoseng pele ha 8am.` });
     } else if (isHot) {
       alerts.push({ icon: '🌡️', color: '#e65100', bg: '#fff3e0',
-        en: `High temperature (${temp}°C) — water ${crop} early morning to reduce heat stress on roots.`,
-        st: `Mocheso o phahami (${temp}°C) — nosetsa ${crop} hoseng ho fokotsa kotsing ea mocheso.` });
+        en: `High temperature (${temp}°C) : water ${crop} early morning to reduce heat stress on roots.`,
+        st: `Mocheso o phahami (${temp}°C) : nosetsa ${crop} hoseng ho fokotsa kotsing ea mocheso.` });
     }
 
     // Humidity and disease risk
     if (isHumid && !isRainy) {
       alerts.push({ icon: '💧', color: '#6a1b9a', bg: '#f3e5f5',
-        en: `High humidity (${Math.round(humid)}%) — inspect ${crop} leaves for early signs of fungal disease.`,
-        st: `Kelello e phahami (${Math.round(humid)}%) — hlahloba makhasi a ${crop} bakeng sa mafu a fungal.` });
+        en: `High humidity (${Math.round(humid)}%) : inspect ${crop} leaves for early signs of fungal disease.`,
+        st: `Kelello e phahami (${Math.round(humid)}%) : hlahloba makhasi a ${crop} bakeng sa mafu a fungal.` });
     }
 
-    // Upcoming rain — field work timing
+    // Upcoming rain : field work timing
     if (forecast?.days?.length > 0) {
       const rainDays = forecast.days.slice(0, 4).filter(d =>
         (d.rainfall_mm || 0) > 3 || (d.description || '').toLowerCase().includes('rain')
@@ -704,8 +704,8 @@ const PlantingGuide = () => {
         const nextRain = rainDays[0];
         const rainDate = new Date(nextRain.date).toLocaleDateString('en-LS', { weekday: 'short', day: 'numeric', month: 'short' });
         alerts.push({ icon: '📅', color: '#1565c0', bg: '#e3f2fd',
-          en: `Rain coming ${rainDate} — good time to apply dry fertilizer before it, rain will help it absorb.`,
-          st: `Pula e tla ${rainDate} — nako e ntle ea ho sebelisa manyolo e omileng pele, pula e tla e ts'oarisa.` });
+          en: `Rain coming ${rainDate} : good time to apply dry fertilizer before it, rain will help it absorb.`,
+          st: `Pula e tla ${rainDate} : nako e ntle ea ho sebelisa manyolo e omileng pele, pula e tla e ts'oarisa.` });
       }
     }
 
@@ -814,7 +814,7 @@ const PlantingGuide = () => {
             </Grid>
           </Grid>
 
-          {/* Latest advice — shown after logging an activity */}
+          {/* Latest advice : shown after logging an activity */}
           {latestAdviceMap[planting.id] && (
             <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 2 }}>
               <Typography variant="caption" fontWeight={700} color="success.main" display="block" sx={{ mb: 0.5 }}>
@@ -826,7 +826,7 @@ const PlantingGuide = () => {
             </Box>
           )}
 
-          {/* Weather advice — uses plant's location weather, falls back to user location */}
+          {/* Weather advice : uses plant's location weather, falls back to user location */}
           {(plantWeatherMap[planting.id] || liveWeather) && planting.status !== 'harvested' && (
             <WeatherAdviceStrip planting={planting} />
           )}
@@ -958,7 +958,7 @@ const PlantingGuide = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Log Activity Dialog — clean input + advice only */}
+      {/* Log Activity Dialog : clean input + advice only */}
       <Dialog open={openActionDialog} onClose={() => { setOpenActionDialog(false); setActionAdvice(null); }} maxWidth="sm" fullWidth>
         <DialogTitle>
           {language === 'en' ? 'Log Activity' : 'Ngola Ketso'}
@@ -1005,7 +1005,7 @@ const PlantingGuide = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Activity History Dialog — opened separately via History icon */}
+      {/* Activity History Dialog : opened separately via History icon */}
       <Dialog open={openHistoryDialog} onClose={() => setOpenHistoryDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           {language === 'en' ? 'Activity History' : 'Histori ea Liketso'}

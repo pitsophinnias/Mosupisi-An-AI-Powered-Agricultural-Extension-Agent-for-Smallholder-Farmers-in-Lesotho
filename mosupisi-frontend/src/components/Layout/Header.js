@@ -78,7 +78,7 @@ const Header = ({ handleDrawerToggle }) => {
     >
       <Toolbar>
 
-        {/* Hamburger — mobile + authenticated only */}
+        {/* Hamburger : mobile + authenticated only */}
         {!isDesktop && isAuthenticated && (
           <IconButton
             color="inherit" edge="start" onClick={handleDrawerToggle}
@@ -106,7 +106,7 @@ const Header = ({ handleDrawerToggle }) => {
         {isDesktop && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
 
-            {/* Nav items — authenticated only */}
+            {/* Nav items : authenticated only */}
             {isAuthenticated && menuItems.map((item) => (
               <Button
                 key={item.path}
@@ -124,7 +124,7 @@ const Header = ({ handleDrawerToggle }) => {
               </Button>
             ))}
 
-            {/* Language toggle — always visible */}
+            {/* Language toggle : always visible */}
             <Tooltip title={language === 'en' ? 'Switch to Sesotho' : 'Fetola ho English'}>
               <Button
                 onClick={handleLanguageClick}
@@ -141,7 +141,7 @@ const Header = ({ handleDrawerToggle }) => {
               </Button>
             </Tooltip>
 
-            {/* Bell icon — authenticated only */}
+            {/* Bell icon : authenticated only */}
             {isAuthenticated && (
               <Tooltip title={language === 'en' ? 'Notifications' : 'Litemoso'}>
                 <IconButton onClick={handleNotifClick} sx={{ ml: 0.5, color: 'white' }}>
@@ -161,7 +161,7 @@ const Header = ({ handleDrawerToggle }) => {
               </Tooltip>
             )}
 
-            {/* User avatar — authenticated only */}
+            {/* User avatar : authenticated only */}
             {isAuthenticated && (
               <Tooltip title={user?.name || 'Account'}>
                 <IconButton onClick={handleUserClick} sx={{ ml: 0.5 }}>
@@ -197,7 +197,7 @@ const Header = ({ handleDrawerToggle }) => {
               <TranslateIcon sx={{ fontSize: 16 }} />
             </IconButton>
 
-            {/* Bell — authenticated only */}
+            {/* Bell : authenticated only */}
             {isAuthenticated && (
               <IconButton onClick={handleNotifClick} sx={{ color: 'white', p: 0.5 }}>
                 <Badge
@@ -211,7 +211,7 @@ const Header = ({ handleDrawerToggle }) => {
               </IconButton>
             )}
 
-            {/* User avatar — authenticated only */}
+            {/* User avatar : authenticated only */}
             {isAuthenticated && (
               <IconButton onClick={handleUserClick} sx={{ p: 0.5 }}>
                 <Avatar
