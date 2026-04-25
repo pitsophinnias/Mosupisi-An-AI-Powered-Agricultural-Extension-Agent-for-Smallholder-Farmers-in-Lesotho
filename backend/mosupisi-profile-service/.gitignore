@@ -1,0 +1,19 @@
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Uploaded files — don't commit user data to git
+uploads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
