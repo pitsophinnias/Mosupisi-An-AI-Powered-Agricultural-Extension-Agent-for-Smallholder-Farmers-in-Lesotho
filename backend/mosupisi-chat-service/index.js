@@ -16,10 +16,12 @@ const dotenv  = require('dotenv');
 
 dotenv.config();
 
-const aiService    = require('./services/aiService');
-const app          = express();
-const PORT         = process.env.PORT         || 3002;
-const PYTHON_AI_URL = process.env.PYTHON_AI_URL || 'http://localhost:3003/api/chat';
+const aiService     = require('./services/aiService');
+const app           = express();
+const PORT          = process.env.PORT         || 3002;
+
+// Fix 1: point to /api/chat/ask (the dedicated route) not /api/chat
+const PYTHON_AI_URL = process.env.PYTHON_AI_URL || 'http://localhost:3003/api/chat/ask';
 
 app.use(cors());
 app.use(express.json());
@@ -54,7 +56,9 @@ app.get('/', (req, res) => {
 app.get('/api/health', async (req, res) => {
   let aiStatus = 'unknown';
   try {
-    const r = await axios.get(PYTHON_AI_URL.replace('/api/chat', '/health'), { timeout: 3000 });
+    // Health endpoint is at /health, not /api/chat/ask
+    const healthUrl = PYTHON_AI_URL.replace('/api/chat/ask', '/health').replace('/api/chat', '/health');
+    const r = await axios.get(healthUrl, { timeout: 3000 });
     aiStatus = r.data.status;
   } catch {
     aiStatus = 'unreachable';
@@ -108,33 +112,35 @@ app.post('/api/chat/ask', async (req, res) => {
   try {
     console.log(`   Forwarding to Python AI: "${question.slice(0, 60)}..."`);
 
+    // Fix 2: send the fields the Python /api/chat/ask route expects
     const payload = {
-      message:         question,
-      conversation_id: req.body.conversationId || null,
-      user_id:         req.body.userId || null,
-      system_note:     weatherContext || null,
-      language:        language,
-      context:         context,
+      question:       question,
+      language:       language,
+      weatherContext: weatherContext || null,
+      context:        context || null,
+      farmer_id:      req.body.userId ? String(req.body.userId) : null,
     };
 
     const response = await axios.post(PYTHON_AI_URL, payload, {
-      timeout: 60000,  // 60s — LLM can be slow on first inference
+      // Fix 3: 120s timeout — first request after startup loads the sentence
+      // transformer (~25s) before inference begins. Subsequent requests are fast.
+      timeout: 120000,
       headers: { 'Content-Type': 'application/json' },
     });
 
     const data = response.data;
 
     res.json({
-      answer:    data.response || data.answer || '',
-      sources:   data.sources  || ['Mosupisi Agricultural Knowledge Base'],
+      answer:    data.answer || data.response || '',
+      sources:   data.sources || ['Mosupisi Agricultural Knowledge Base'],
       timestamp: new Date().toISOString(),
     });
 
   } catch (err) {
     console.error('Python AI error:', err.message);
 
-    // Fallback to JS knowledge base if Python AI is down
-    if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+    // Fallback to JS knowledge base if Python AI is down or timed out
+    if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ERR_BAD_RESPONSE') {
       console.log('   Python AI unavailable — using JS fallback');
       try {
         const fallback = await aiService.getResponse(question, context, language);
@@ -154,6 +160,40 @@ app.post('/api/chat/ask', async (req, res) => {
       message: 'Could not get a response. Please try again.',
       details: err.message,
     });
+  }
+});
+
+// Also handle the dashboard's direct POST /api/chat (sends { message, conversationId, userId })
+app.post('/api/chat', async (req, res) => {
+  const { message, conversationId, userId, language = 'en' } = req.body;
+
+  if (!message?.trim()) {
+    return res.status(400).json({ error: 'message is required' });
+  }
+
+  try {
+    const payload = {
+      question:       message,
+      language:       language,
+      weatherContext: null,
+      context:        null,
+      farmer_id:      userId ? String(userId) : null,
+    };
+
+    const response = await axios.post(PYTHON_AI_URL, payload, {
+      timeout: 120000,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const data = response.data;
+    res.json({
+      response:  data.answer || data.response || '',
+      sources:   data.sources || [],
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Python AI error (dashboard):', err.message);
+    res.status(502).json({ error: 'AI service unavailable', message: err.message });
   }
 });
 
