@@ -7,6 +7,7 @@
 # Project: Mosupisi – AI Agricultural Extension Agent for Lesotho
 # Bilingual: English + Sesotho | Crops: maize, sorghum, legumes
 
+
 from __future__ import annotations
 import os
 from pathlib import Path
@@ -41,7 +42,7 @@ from routes.plantings import router as plantings_router
 async def lifespan(app: FastAPI):
     init_db()
     print("✅ Mosupisi PlantingGuide DB initialised (planting.db)")
-    print("🌽 LLM backend:", "Groq (llama-3-8b-8192)" if os.getenv("GROQ_API_KEY") else "OpenAI" if os.getenv("OPENAI_API_KEY") else "⚠️ No API key")
+    print("🌽 LLM backend:", "Groq (llama-3.1-8b-instant)" if os.getenv("GROQ_API_KEY") else "OpenAI" if os.getenv("OPENAI_API_KEY") else "⚠️ No API key")
     yield
 
 # ---------------------------------------------------------------------------
@@ -52,7 +53,8 @@ async def lifespan(app: FastAPI):
     # Startup: create SQLite tables if they don't exist
     init_db()
     print("✅  Mosupisi PlantingGuide DB initialised (planting.db)")
-    print("🌽  LLM backend:", "Groq (llama-3-8b-8192)" if os.getenv("GROQ_API_KEY") else "OpenAI (gpt-3.5-turbo)" if os.getenv("OPENAI_API_KEY") else "⚠️  No API key set – /advice will return fallback")
+    #print("🌽  LLM backend:", "Groq (llama-3.1-8b-instant)" if os.getenv("GROQ_API_KEY") else "OpenAI (gpt-3.5-turbo)" if os.getenv("OPENAI_API_KEY") else "⚠️  No API key set – /advice will return fallback")
+    print("🌽  LLM backend: Local GGUF (mosupisi-q4.gguf)")
     yield
     # Shutdown: nothing to clean up for SQLite
 

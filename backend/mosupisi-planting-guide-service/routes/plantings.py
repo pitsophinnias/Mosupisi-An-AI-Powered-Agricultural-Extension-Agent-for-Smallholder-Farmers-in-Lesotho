@@ -214,32 +214,16 @@ Bulletin context for {location}:
 
 Answer (3-4 sentences, all specific to {crop} at {stage}):"""
 
-    prompt_st = f"""Ke Mosupisi, moeletsi oa temo bakeng sa balimi ba Lesotho.
-
-LINTLHA TSA SEJALO SENA:
-- Sejalo: {crop}
-- Boemo ba kholo ha joale: {stage}
-- Sebaka: {location}
-- Ketso e ngoliloe: "{action}"
-
-Mosebetsi oa hau: Fana ka keletso bakeng sa {crop} feela sebakeng sa {stage}. Se arabe ka kakaretso.
-
-Araba lintho tsena tse tharo bakeng sa {crop} sebakeng sa {stage}:
-1. Na "{action}" e ne e nepahile nakong ea {stage} bakeng sa {crop}? (mofuta o le mong)
-2. Na {crop} ena e lokela ho etsa eng HAJOALE le NENG? (be specific: "ka matsatsi a 3", "Laboraro hosane 6-9am", "ka libeke tse 2")
-3. Temoso e le 'ngoe e hlakileng bakeng sa {crop} sebakeng sa {stage} {location}
-
-Karabo (mefuta e 3-4, kaofela e hlakileng bakeng sa {crop} sebakeng sa {stage}):"""
-
     try:
         advice_en = generate_with_slm(prompt_en)
     except Exception:
         advice_en = _fallback_action_advice(action, crop, stage, "en")
 
-    try:
-        advice_st = generate_with_slm(prompt_st)
-    except Exception:
-        advice_st = _fallback_action_advice(action, crop, stage, "st")
+    if language == "st":
+        from rag import _translate_to_sesotho
+        advice_st = _translate_to_sesotho(advice_en)
+    else:
+        advice_st = advice_en
 
     return advice_en, advice_st
 
