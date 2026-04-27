@@ -25,6 +25,7 @@ import {
   askPestQuestion, checkHealth,
 } from '../../services/pestControlService';
 import { weatherApi } from '../../services/api';
+import { useNotifications } from '../../context/NotificationContext';
 
 const SPRAY_RAIN_MM = 5;
 const SPRAY_WIND_MS = 10;
@@ -43,6 +44,8 @@ const DISTRICT_COORDS = {
   'thaba-tseka':   { lat: -29.52, lon: 28.61, name: 'Thaba-Tseka' },
   'semonkong':     { lat: -29.85, lon: 28.05, name: 'Semonkong' },
   'oxbow':         { lat: -28.73, lon: 28.62, name: 'Oxbow' },
+  'qholaqhoe':     { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
+  'lipelaneng':    { lat: -28.87, lon: 28.09, name: 'Butha-Buthe' },
 };
 
 function resolveCoords(locationStr) {
@@ -66,6 +69,94 @@ const getSeverityLabel = (severity, language) => ({
   high:   language === 'en' ? 'High'   : 'Holoholo',
 }[severity] || severity);
 
+// ── normaliseAdvice ────────────────────────────────────────────────────────────
+// Converts inline numbered points ("1. text 2. text") into one-per-line.
+// Handles duplicate numbers the model sometimes emits ("2. 2. text").
+const normaliseAdvice = (text) => {
+  if (!text) return text;
+  let t = text.replace(/(\d+)\.\s+\1\./g, '$1.');
+  t = t.replace(/\s+(?=\d+\.\s)/g, '\n');
+  return t.trim();
+};
+
+// ── AdviceText ─────────────────────────────────────────────────────────────────
+// Renders AI advice as numbered cards — same pattern as PlantingGuide
+const AdviceText = ({ text }) => {
+  if (!text) return null;
+  const lines = normaliseAdvice(text).split('\n').filter(l => l.trim());
+  const items = [];
+  let plainBuffer = [];
+  let pointIndex = 0;
+
+  const flushPlain = () => {
+    if (plainBuffer.length) {
+      items.push({ type: 'plain', text: plainBuffer.join(' ') });
+      plainBuffer = [];
+    }
+  };
+
+  lines.forEach((line) => {
+    const numbered       = line.match(/^\d+\.\s+\*\*(.+?)\*\*[:\-]?\s*(.*)/);
+    const numberedPlain  = line.match(/^\d+\.\s+([^:*\n]{3,60}):\s*(.*)/);
+    const numberedSimple = line.match(/^\d+\.\s+(.*)/);
+    if (numbered) {
+      flushPlain();
+      items.push({ type: 'point', title: numbered[1], body: numbered[2] });
+    } else if (numberedPlain) {
+      flushPlain();
+      items.push({ type: 'point', title: numberedPlain[1], body: numberedPlain[2] });
+    } else if (numberedSimple) {
+      flushPlain();
+      items.push({ type: 'point', title: null, body: numberedSimple[1] });
+    } else {
+      plainBuffer.push(line.replace(/\*\*(.*?)\*\*/g, '$1'));
+    }
+  });
+  flushPlain();
+
+  return (
+    <Box>
+      {items.map((item, i) => {
+        if (item.type === 'point') {
+          pointIndex++;
+          const num = pointIndex;
+          return (
+            <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.25, alignItems: 'flex-start' }}>
+              <Box sx={{
+                minWidth: 24, height: 24, borderRadius: '50%',
+                bgcolor: 'success.main', color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.7rem', fontWeight: 700, flexShrink: 0, mt: 0.15,
+              }}>
+                {num}
+              </Box>
+              <Box>
+                {item.title && (
+                  <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.5 }}>
+                    {item.title}
+                  </Typography>
+                )}
+                {item.body && (
+                  <Typography variant="body2" color="text.secondary"
+                    sx={{ lineHeight: 1.6, mt: item.title ? 0.2 : 0 }}>
+                    {item.body}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          );
+        }
+        return (
+          <Typography key={i} variant="body2" color="text.secondary"
+            sx={{ mb: 1, lineHeight: 1.65, whiteSpace: 'pre-line' }}>
+            {item.text}
+          </Typography>
+        );
+      })}
+    </Box>
+  );
+};
+
 // ── Weather advice per pest + conditions ───────────────────────────────────────
 function getPestWeatherAdvice(pestName, weather, language) {
   if (!weather) return null;
@@ -80,12 +171,12 @@ function getPestWeatherAdvice(pestName, weather, language) {
   // Spray window
   if (wind > SPRAY_WIND_MS) {
     tips.push(isEn
-      ? `💨 Wind ${wind.toFixed(1)} m/s — avoid spraying until wind drops below ${SPRAY_WIND_MS} m/s`
-      : `💨 Moea ${wind.toFixed(1)} m/s — se fifafatse ho fihlela moea o fokotsehile tlase ho ${SPRAY_WIND_MS} m/s`);
+      ? `💨 Wind ${wind.toFixed(1)} m/s : avoid spraying until wind drops below ${SPRAY_WIND_MS} m/s`
+      : `💨 Moea ${wind.toFixed(1)} m/s : se fifafatse ho fihlela moea o fokotsehile tlase ho ${SPRAY_WIND_MS} m/s`);
   } else if (rain >= SPRAY_RAIN_MM) {
     tips.push(isEn
-      ? `🌧️ Rain ${rain} mm — delay spraying until dry`
-      : `🌧️ Pula ${rain} mm — lieha ho fifafatsa ho fihlela ho omile`);
+      ? `🌧️ Rain ${rain} mm : delay spraying until dry`
+      : `🌧️ Pula ${rain} mm : lieha ho fifafatsa ho fihlela ho omile`);
   } else {
     tips.push(isEn
       ? `✅ Good spray conditions today (wind ${wind.toFixed(1)} m/s, no heavy rain)`
@@ -96,8 +187,8 @@ function getPestWeatherAdvice(pestName, weather, language) {
   if (name.includes('armyworm') || name.includes('sesobeng')) {
     if (temp >= 18 && temp <= 30 && humid >= 65) {
       tips.push(isEn
-        ? `⚠️ Warm humid conditions (${temp.toFixed(0)}°C, ${humid.toFixed(0)}%) — HIGH fall armyworm risk. Scout fields daily`
-        : `⚠️ Maemo a chesang a mongobo (${temp.toFixed(0)}°C, ${humid.toFixed(0)}%) — KOTSI e PHAHAMENG ea sesobeng. Hlahloba masimo letsatsi le letsatsi`);
+        ? `⚠️ Warm humid conditions (${temp.toFixed(0)}°C, ${humid.toFixed(0)}%) : HIGH fall armyworm risk. Scout fields daily`
+        : `⚠️ Maemo a chesang a mongobo (${temp.toFixed(0)}°C, ${humid.toFixed(0)}%) : KOTSI e PHAHAMENG ea sesobeng. Hlahloba masimo letsatsi le letsatsi`);
     }
   }
   if (name.includes('stalk borer') || name.includes('mobi')) {
@@ -116,8 +207,8 @@ function getPestWeatherAdvice(pestName, weather, language) {
   }
   if (humid >= 80) {
     tips.push(isEn
-      ? `🍄 High humidity (${humid.toFixed(0)}%) — watch for fungal disease on leaves`
-      : `🍄 Mongobo o phahamile (${humid.toFixed(0)}%) — sheba mafu a likhohle mathaung`);
+      ? `🍄 High humidity (${humid.toFixed(0)}%) : watch for fungal disease on leaves`
+      : `🍄 Mongobo o phahamile (${humid.toFixed(0)}%) : sheba mafu a likhohle mathaung`);
   }
 
   return tips;
@@ -190,14 +281,18 @@ const SprayWindowBanner = ({ forecast, language }) => {
 };
 
 // ── WeatherAdviceStrip (My Reports cards) ──────────────────────────────────────
+// Fix: use location as the key for the ref so each unique location gets its own fetch
 const WeatherAdviceStrip = ({ pestName, location, language }) => {
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(true);
-  const fetchedRef            = useRef(false);
+  // Use a ref keyed to location so re-mounting with a different location re-fetches
+  const fetchedLocation = useRef(null);
 
   useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
+    if (fetchedLocation.current === location) return;
+    fetchedLocation.current = location;
+    setLoading(true);
+    setWeather(null);
     const { lat, lon, name } = resolveCoords(location);
     weatherApi.getCurrent(lat, lon, name)
       .then(w => setWeather(w))
@@ -417,11 +512,11 @@ const PestCard = ({ pest, language, onAsk, onReport }) => {
 // ── Main Component ─────────────────────────────────────────────────────────────
 const PestControl = () => {
   const { user }        = useAuth();
+  const { fetchNotifications } = useNotifications();
   const { t, language } = useLanguage();
   const navigate        = useNavigate();
   const theme           = useTheme();
 
-  // Tab 0 = My Reports, Tab 1 = Pest Library, Tab 2 = Prevention Tips
   const [tabValue,       setTabValue]       = useState(0);
   const [pests,          setPests]          = useState([]);
   const [reports,        setReports]        = useState([]);
@@ -445,9 +540,8 @@ const PestControl = () => {
     location: '', severity: 'medium', action_taken: '', notes: '',
   });
 
-  const [sprayForecast, setSprayForecast] = useState(null);
-  const [weatherAlerts, setWeatherAlerts] = useState([]);
-  const [, setWeatherLoading]             = useState(false);
+  const [sprayForecast,  setSprayForecast]  = useState(null);
+  const [weatherAlerts,  setWeatherAlerts]  = useState([]);
 
   const [openPestActionDialog,  setOpenPestActionDialog]  = useState(false);
   const [openPestHistoryDialog, setOpenPestHistoryDialog] = useState(false);
@@ -458,24 +552,40 @@ const PestControl = () => {
   const [pestActionLoading,     setPestActionLoading]     = useState(false);
   const [pestLatestAdviceMap,   setPestLatestAdviceMap]   = useState({});
 
-  // ── Fetch spray forecast — always from today ─────────────────────────────────
+  // ── Fetch spray forecast + weather alerts from notification service ────────
   useEffect(() => {
     const { lat, lon, name } = resolveCoords(user?.region || 'Maseru');
-    setWeatherLoading(true);
+
+    // Spray forecast
     weatherApi.getForecast(lat, lon, 7, name)
-      .then(async (forecast) => {
+      .then((forecast) => {
         const todayStr = new Date().toISOString().split('T')[0];
         if (forecast?.days) {
           forecast.days = forecast.days.filter(d => d.date >= todayStr);
         }
         setSprayForecast(forecast);
-        try {
-          const alerts = await weatherApi.evaluateForecastAlerts(forecast, user?.id || null);
-          setWeatherAlerts(alerts.filter(a => ['severe', 'critical'].includes(a.severity)));
-        } catch { /* non-fatal */ }
       })
-      .catch(err => console.warn('PestControl: weather fetch failed', err))
-      .finally(() => setWeatherLoading(false));
+      .catch(err => console.warn('PestControl: forecast fetch failed', err));
+
+    // Weather alerts — fetch from notification service using the same URL pattern
+    // as NotificationContext.apiFetch: /path?farmer_id=N (no extra query params
+    // that the service might not support, filter client-side instead)
+    if (user?.id) {
+      const NOTIF_URL = process.env.REACT_APP_NOTIFICATION_SERVICE_URL || 'http://localhost:8004';
+      const todayStr  = new Date().toISOString().split('T')[0];
+      fetch(`${NOTIF_URL}/notifications/?farmer_id=${user.id}`)
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          const list = Array.isArray(data) ? data : [];
+          const recent = list.filter(n =>
+            n.type === 'weather' &&
+            ['warning', 'critical'].includes(n.severity) &&
+            n.created_at?.startsWith(todayStr)
+          );
+          setWeatherAlerts(recent);
+        })
+        .catch(() => {}); // non-fatal — alerts are a nice-to-have
+    }
   }, [user]);
 
   const loadPestLibrary = useCallback(async (crop = 'all') => {
@@ -513,15 +623,13 @@ const PestControl = () => {
   useEffect(() => {
     checkHealth().then(h => setServiceReady(h.status === 'healthy'));
     loadPestLibrary();
-    loadReports(); // load reports on mount since it's the default tab
+    loadReports();
   }, [loadPestLibrary, loadReports]);
 
-  // Reload reports when switching to My Reports tab (tab 0)
   useEffect(() => {
     if (tabValue === 0) loadReports();
   }, [tabValue, loadReports]);
 
-  // Load pest library when switching to Pest Library tab (tab 1)
   useEffect(() => {
     if (tabValue === 1) loadPestLibrary(selectedCrop);
   }, [tabValue]); // eslint-disable-line
@@ -593,11 +701,7 @@ const PestControl = () => {
         crop: '', pest_name: '', date_observed: format(new Date(), 'yyyy-MM-dd'),
         location: '', severity: 'medium', action_taken: '', notes: '',
       });
-      setSnackbar({
-        open: true,
-        message: language === 'en' ? 'Report submitted!' : 'Tlaleho e rometsoe!',
-        severity: 'success',
-      });
+      setSnackbar({ open: true, message: language === 'en' ? 'Report submitted!' : 'Tlaleho e rometsoe!', severity: 'success' });
       if (tabValue === 0) loadReports();
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
@@ -626,7 +730,6 @@ const PestControl = () => {
 
   const handleChangeSeverity = async (reportId, newSeverity) => {
     try {
-      await updatePestReport(reportId, { status: 'monitoring' });
       const BASE = process.env.REACT_APP_PEST_CONTROL_SERVICE_URL || 'http://localhost:8001';
       await fetch(`${BASE}/api/pests/reports/${reportId}`, {
         method: 'PATCH',
@@ -735,20 +838,21 @@ const PestControl = () => {
         </Box>
       </Box>
 
-      {/* Severe weather alerts */}
+      {/* Weather alerts from notification service */}
       {weatherAlerts.length > 0 && (
         <Box sx={{ mb: 2 }}>
           {weatherAlerts.map((alert, i) => (
             <Alert key={i}
               severity={alert.severity === 'critical' ? 'error' : 'warning'}
-              icon={<WeatherIcon fontSize="small" />} sx={{ mb: 1 }}>
-              <strong>{alert.title}:</strong> {alert.message}
+              icon={<WeatherIcon fontSize="small" />}
+              sx={{ mb: 1 }}>
+              <strong>{alert.title}:</strong> {alert.body}
             </Alert>
           ))}
         </Box>
       )}
 
-      {/* Tabs — My Reports first */}
+      {/* Tabs */}
       <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}
         variant="scrollable" scrollButtons="auto"
         sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
@@ -884,20 +988,21 @@ const PestControl = () => {
                   {/* Latest logged advice */}
                   {pestLatestAdviceMap[report.id] && (
                     <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 2 }}>
-                      <Typography variant="caption" fontWeight={700} color="success.main" display="block" sx={{ mb: 0.5 }}>
+                      <Typography variant="caption" fontWeight={700} color="success.main" display="block" sx={{ mb: 0.75 }}>
                         💡 {language === 'en' ? 'Latest advice:' : 'Keletso ea morao-rao:'}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
-                        {language === 'en'
+                      <AdviceText
+                        text={language === 'en'
                           ? pestLatestAdviceMap[report.id].en
                           : pestLatestAdviceMap[report.id].st}
-                      </Typography>
+                      />
                     </Box>
                   )}
 
-                  {/* Weather advice strip — per report location, active reports only */}
+                  {/* Weather advice strip */}
                   {report.status !== 'resolved' && (
                     <WeatherAdviceStrip
+                      key={report.id}
                       pestName={report.pest_name}
                       location={report.location}
                       language={language}
@@ -1116,11 +1221,9 @@ const PestControl = () => {
 
           {askAnswer && (
             <Box sx={{ mt: 1 }}>
-              <Alert severity="success" sx={{ mb: 2 }}>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                  {askAnswer.answer}
-                </Typography>
-              </Alert>
+              <Box sx={{ p: 1.5, bgcolor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 2, mb: 2 }}>
+                <AdviceText text={askAnswer.answer} />
+              </Box>
               {askAnswer.relevant_pests?.length > 0 && (
                 <Box sx={{ mb: 1 }}>
                   <Typography variant="caption" fontWeight={700} color="text.secondary">
@@ -1189,14 +1292,17 @@ const PestControl = () => {
             </Box>
           )}
           {pestActionAdvice && (
-            <Alert severity="success">
-              <Typography variant="body2" fontWeight={600} gutterBottom>
-                💡 {language === 'en' ? 'Recommended next steps:' : 'Mehato e latelang:'}
-              </Typography>
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                {language === 'en' ? pestActionAdvice.en : pestActionAdvice.st}
-              </Typography>
-            </Alert>
+            <Box sx={{ p: 1.5, bgcolor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Box sx={{ width: 4, height: 18, bgcolor: 'success.main', borderRadius: 1 }} />
+                <Typography variant="body2" fontWeight={700} color="success.main">
+                  💡 {language === 'en' ? 'Recommended next steps:' : 'Mehato e latelang:'}
+                </Typography>
+              </Box>
+              <AdviceText
+                text={language === 'en' ? pestActionAdvice.en : pestActionAdvice.st}
+              />
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
@@ -1247,13 +1353,13 @@ const PestControl = () => {
                     </Typography>
                   </Box>
                   {(log.advice_en || log.advice_st) && (
-                    <Box sx={{ mt: 0.75, p: 1, bgcolor: '#f0fdf4', borderRadius: 1, border: '1px solid #bbf7d0' }}>
-                      <Typography variant="caption" color="success.main" fontWeight={600} display="block" sx={{ mb: 0.25 }}>
+                    <Box sx={{ mt: 0.75, p: 1.25, bgcolor: '#f0fdf4', borderRadius: 1, border: '1px solid #bbf7d0' }}>
+                      <Typography variant="caption" color="success.main" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
                         💡 {language === 'en' ? 'Advice given:' : 'Keletso e fanoeng:'}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
-                        {language === 'en' ? log.advice_en : log.advice_st}
-                      </Typography>
+                      <AdviceText
+                        text={language === 'en' ? log.advice_en : log.advice_st}
+                      />
                     </Box>
                   )}
                 </Box>
