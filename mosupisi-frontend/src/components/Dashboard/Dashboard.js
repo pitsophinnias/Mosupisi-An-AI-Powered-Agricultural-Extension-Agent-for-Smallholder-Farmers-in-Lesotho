@@ -314,70 +314,121 @@ const Dashboard = () => {
         </IconButton>
       </Box>
 
-      {/* ── Welcome Card ──────────────────────────────────────────────────────── */}
-      <Paper sx={{
-        p: 3, mb: 3, borderRadius: 2, color: 'white',
-        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-      }}>
-        {/* Greeting */}
-        <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.3rem', sm: '2rem' } }}>
-          {t('welcome')}, {user?.name?.split(' ')[0] }! 
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.85 }}>
-          {language === 'en' ? 'Region' : 'Setereke'}: {user?.region || 'Maseru'}
-          {user?.crops?.length > 0 && (
-            <> &nbsp;·&nbsp; {language === 'en' ? 'Crops' : 'Lijalo'}: {user.crops.map(c => t(c)).join(', ')}</>
-          )}
-        </Typography>
+      {/* ── Welcome Card ──────────────────────────────────────────────────── */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 3, mb: 3, borderRadius: 3,
+          background: `linear-gradient(145deg, #0f3d2e 0%, #145a32 60%, #1a6b3a 100%)`,
+          border: '1px solid #0a2e22',
+          position: 'relative',
+          overflow: 'hidden',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: -40, right: -40,
+            width: 180, height: 180,
+            borderRadius: '50%',
+            background: 'rgba(76,175,80,0.12)',
+            pointerEvents: 'none',
+          },
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            bottom: -30, left: '30%',
+            width: 120, height: 120,
+            borderRadius: '50%',
+            background: 'rgba(76,175,80,0.08)',
+            pointerEvents: 'none',
+          },
+        }}
+      >
+        {/* Greeting row */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+          <Box>
+            <Typography
+              variant="h4"
+              sx={{ color: '#ffffff', fontWeight: 600, fontSize: { xs: '1.4rem', sm: '1.9rem' }, lineHeight: 1.2 }}
+            >
+              {t('welcome')}, {user?.name?.split(' ')[0] || 'Ntate'}! 
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mt: 0.5 }}>
+              {language === 'en' ? 'Region' : 'Setereke'}: {user?.region || 'Maseru'}
+              {user?.crops?.length > 0 && (
+                <> &nbsp;·&nbsp; {user.crops.map(c => t(c)).join(', ')}</>
+              )}
+            </Typography>
+          </Box>
 
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.25)', my: 2 }} />
-
-        {/* Today's Advice */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-          <TipIcon sx={{ fontSize: 18, opacity: 0.9 }} />
-          <Typography variant="subtitle2" sx={{ opacity: 0.9, fontWeight: 600, letterSpacing: 0.5 }}>
-            {language === 'en' ? "TODAY'S ADVICE" : 'KELETSO EA KAJENO'}
-          </Typography>
-          {adviceIsAI && (
-            <Chip
-              label="AI"
-              size="small"
-              sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.2)', color: 'white', ml: 'auto' }}
-            />
-          )}
-          {weatherIsStale && (
-            <Chip
-              icon={<OfflineIcon sx={{ fontSize: '0.7rem !important' }} />}
-              label={language === 'en' ? 'Offline' : 'Ha u hokahane'}
-              size="small"
-              sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(255,200,0,0.25)', color: 'white', ml: adviceIsAI ? 0 : 'auto' }}
-            />
-          )}
+          {/* Status badges */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+            {adviceIsAI && (
+              <Chip
+                label={language === 'en' ? '✦ AI Advice' : '✦ Keletso ea AI'}
+                size="small"
+                sx={{
+                  bgcolor: 'rgba(76,175,80,0.3)',
+                  color: '#a5d6a7',
+                  fontSize: '0.7rem', height: 22,
+                  border: '1px solid rgba(76,175,80,0.4)',
+                }}
+              />
+            )}
+            {weatherIsStale && (
+              <Chip
+                icon={<OfflineIcon sx={{ fontSize: '12px !important', color: '#ffe082 !important' }} />}
+                label={language === 'en' ? 'Offline' : 'Ha u hokahane'}
+                size="small"
+                sx={{
+                  bgcolor: 'rgba(255,193,7,0.15)',
+                  color: '#ffe082',
+                  fontSize: '0.7rem', height: 22,
+                  border: '1px solid rgba(255,193,7,0.3)',
+                }}
+              />
+            )}
+          </Box>
         </Box>
 
+        {/* Section label */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2.5, mb: 1.5 }}>
+          <TipIcon sx={{ fontSize: 15, color: '#a5d6a7' }} />
+          <Typography variant="caption" sx={{ color: '#a5d6a7', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
+            {language === 'en' ? "Today's Advice" : 'Keletso ea Kajeno'}
+          </Typography>
+          <Box sx={{ flex: 1, height: '1px', bgcolor: 'rgba(165,214,167,0.2)', ml: 1 }} />
+        </Box>
+
+        {/* Advice panels */}
         <Grid container spacing={1.5}>
+
           {/* Crop advice */}
           <Grid item xs={12} sm={6}>
             <Box sx={{
-              bgcolor: 'rgba(255,255,255,0.12)',
-              borderRadius: 2, p: 1.5,
-              borderLeft: '3px solid rgba(255,255,255,0.5)',
-              minHeight: 70,
+              bgcolor: 'rgba(0,0,0,0.25)',
+              borderRadius: 2,
+              p: 2,
+              borderLeft: `3px solid ${theme.palette.primary.main}`,
+              minHeight: 90,
+              backdropFilter: 'blur(4px)',
             }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <AgricultureIcon sx={{ fontSize: 14, opacity: 0.8 }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, opacity: 0.8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+                <AgricultureIcon sx={{ fontSize: 15, color: theme.palette.primary.light }} />
+                <Typography variant="caption" sx={{
+                  fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
+                  color: theme.palette.primary.light,
+                }}>
                   {language === 'en' ? 'Crops' : 'Lijalo'}
                 </Typography>
               </Box>
               {adviceLoading && !cropAdvice ? (
                 <>
-                  <Skeleton variant="text" sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
-                  <Skeleton variant="text" width="80%" sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
+                  <Skeleton variant="text" sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
+                  <Skeleton variant="text" width="75%" sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
                 </>
               ) : (
-                <Typography variant="body2" sx={{ lineHeight: 1.4 }}>
-                  {cropAdvice || (language === 'en' ? 'Loading crop advice...' : 'E ntse e jarolla keletso ea lijalo...')}
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.88)', lineHeight: 1.55 }}>
+                  {cropAdvice || (language === 'en' ? 'Fetching crop advice...' : 'E fumana keletso ea lijalo...')}
                 </Typography>
               )}
             </Box>
@@ -386,39 +437,53 @@ const Dashboard = () => {
           {/* Pest advice */}
           <Grid item xs={12} sm={6}>
             <Box sx={{
-              bgcolor: 'rgba(255,150,0,0.2)',
-              borderRadius: 2, p: 1.5,
-              borderLeft: '3px solid rgba(255,180,0,0.7)',
-              minHeight: 70,
+              bgcolor: 'rgba(0,0,0,0.25)',
+              borderRadius: 2,
+              p: 2,
+              borderLeft: `3px solid ${theme.palette.warning.dark}`,
+              minHeight: 90,
+              backdropFilter: 'blur(4px)',
             }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <PestIcon sx={{ fontSize: 14, opacity: 0.8 }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, opacity: 0.8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+                <PestIcon sx={{ fontSize: 15, color: theme.palette.warning.main }} />
+                <Typography variant="caption" sx={{
+                  fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
+                  color: theme.palette.warning.main,
+                }}>
                   {language === 'en' ? 'Pest Risk' : 'Kotsi ea Likokonyana'}
                 </Typography>
               </Box>
               {adviceLoading && !pestAdvice ? (
                 <>
-                  <Skeleton variant="text" sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
-                  <Skeleton variant="text" width="80%" sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
+                  <Skeleton variant="text" sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
+                  <Skeleton variant="text" width="75%" sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
                 </>
               ) : (
-                <Typography variant="body2" sx={{ lineHeight: 1.4 }}>
-                  {pestAdvice || (language === 'en' ? 'Loading pest advice...' : 'E ntse e jarolla keletso ea likokonyana...')}
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.88)', lineHeight: 1.55 }}>
+                  {pestAdvice || (language === 'en' ? 'Fetching pest advice...' : 'E fumana keletso ea likokonyana...')}
                 </Typography>
               )}
             </Box>
           </Grid>
         </Grid>
 
-        {/* Refresh advice button */}
+        {/* Refresh advice */}
         <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             size="small"
             onClick={() => { adviceFetched.current = false; if (weather) fetchAdvice(weather); }}
             disabled={adviceLoading}
-            sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', minHeight: 32, textTransform: 'none',
-              '&:hover': { color: 'white', bgcolor: 'rgba(255,255,255,0.1)' } }}
+            sx={{
+              color: 'rgba(165,214,167,0.7)',
+              fontSize: '0.72rem',
+              minHeight: 28,
+              height: 28,
+              px: 1.5,
+              textTransform: 'none',
+              borderRadius: 2,
+              '&:hover': { color: '#a5d6a7', bgcolor: 'rgba(76,175,80,0.15)' },
+              '&:disabled': { color: 'rgba(255,255,255,0.25)' },
+            }}
           >
             {adviceLoading
               ? (language === 'en' ? 'Getting advice...' : 'E fumana keletso...')

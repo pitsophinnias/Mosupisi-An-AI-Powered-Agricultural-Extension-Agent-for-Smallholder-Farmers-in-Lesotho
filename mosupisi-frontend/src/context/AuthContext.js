@@ -195,6 +195,54 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const uploadAvatar = async (file) => {
+  try {
+    const token = storage.getAccessToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${PROFILE_SERVICE_URL}/profile/me/avatar`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+      // No Content-Type header — browser sets it with boundary automatically
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+    const userObj = _normaliseProfile(data);
+    storage.setUser(userObj);
+    setUser(userObj);
+    enqueueSnackbar('Profile picture updated!', { variant: 'success' });
+    return { success: true };
+  } catch (err) {
+    enqueueSnackbar(err.message || 'Upload failed', { variant: 'error' });
+    return { success: false, error: err.message };
+  }
+};
+
+const deleteAvatar = async () => {
+  try {
+    const token = storage.getAccessToken();
+    const res = await fetch(`${PROFILE_SERVICE_URL}/profile/me/avatar`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Delete failed');
+
+    const userObj = _normaliseProfile(data);
+    storage.setUser(userObj);
+    setUser(userObj);
+    enqueueSnackbar('Profile picture removed', { variant: 'info' });
+    return { success: true };
+  } catch (err) {
+    enqueueSnackbar(err.message || 'Delete failed', { variant: 'error' });
+    return { success: false, error: err.message };
+  }
+};
+
   // ── Forgot password ────────────────────────────────────────────────────────
 
   const forgotPassword = async (mobile) => {
@@ -254,6 +302,8 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateUser,
+    uploadAvatar,     
+    deleteAvatar,
     forgotPassword,
     resetPassword,
     completeOnboarding,
@@ -280,7 +330,8 @@ function _normaliseProfile(profile) {
     language:             profile.language,
     role:                 profile.role,
     onboarding_complete:  profile.onboarding_complete,
+    avatar_url:          profile.avatar_url || null,
     createdAt:            profile.created_at,
-    crops:                [],   // crops are now per-farm; kept for Profile.js compatibility
+    crops:                [],   
   };
 }

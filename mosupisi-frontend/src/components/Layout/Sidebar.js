@@ -9,7 +9,7 @@ import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import PersonIcon from '@mui/icons-material/Person';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
 import BugReportIcon from '@mui/icons-material/BugReport';
-import LanguageIcon from '@mui/icons-material/Language';
+import TranslateIcon from '@mui/icons-material/Translate';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -125,10 +125,10 @@ const Sidebar = ({ mobileOpen, handleDrawerToggle }) => {
             }}
           >
             <ListItemIcon sx={{ color: 'white', minWidth: 38 }}>
-              <LanguageIcon />
+              <TranslateIcon />
             </ListItemIcon>
             <ListItemText
-              primary={language === 'en' ? 'Sesotho' : 'English'}
+              primary={language === 'en' ? '🇬🇧 English' :'🇱🇸 Sesotho' }
               secondary={language === 'en' ? 'Switch language' : 'Fetola puo'}
               primaryTypographyProps={{ fontWeight: 400, fontSize: '0.9rem' }}
               secondaryTypographyProps={{ sx: { color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' } }}
