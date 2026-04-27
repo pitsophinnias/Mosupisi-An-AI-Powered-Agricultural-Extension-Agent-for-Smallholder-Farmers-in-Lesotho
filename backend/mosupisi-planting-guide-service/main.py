@@ -1,10 +1,10 @@
 # main.py
-# Mosupisi PlantingGuide Microservice – FastAPI application
+# Mosupisi PlantingGuide Microservice - FastAPI application
 #
 # Run with:
-#   uvicorn main:app --port 3001 --reload
+#   uvicorn main:app --port 3001 --reload --reload-exclude ".venv"
 #
-# Project: Mosupisi – AI Agricultural Extension Agent for Lesotho
+# Project: Mosupisi - AI Agricultural Extension Agent for Lesotho
 # Bilingual: English + Sesotho | Crops: maize, sorghum, legumes
 
 
@@ -24,37 +24,27 @@ env_path = Path(__file__).parent / ".env"
 print(".env file path:", env_path)
 print(".env file exists?", env_path.exists())
 
-# Load with absolute path + override
 load_dotenv(dotenv_path=env_path, override=True)
 
-print("🔑 GROQ_API_KEY loaded:", "✅ YES" if os.getenv("GROQ_API_KEY") else "❌ NO")
-print("🔑 OPENAI_API_KEY loaded:", "✅ YES" if os.getenv("OPENAI_API_KEY") else "❌ NO")
+print("LLM_SERVICE_URL loaded:", os.getenv("LLM_SERVICE_URL", "http://localhost:3004"))
 # =============================================================================
 
 from database import init_db
 from routes.plantings import router as plantings_router
+from rag import eager_load
 
-
-# --------------------------------------------------------------------------- 
-# Lifespan (unchanged)
-# --------------------------------------------------------------------------- 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    print("✅ Mosupisi PlantingGuide DB initialised (planting.db)")
-    print("🌽 LLM backend:", "Groq (llama-3.1-8b-instant)" if os.getenv("GROQ_API_KEY") else "OpenAI" if os.getenv("OPENAI_API_KEY") else "⚠️ No API key")
-    yield
 
 # ---------------------------------------------------------------------------
-# Lifespan – runs on startup and shutdown
+# Lifespan - runs on startup and shutdown
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create SQLite tables if they don't exist
+    # Startup: create SQLite tables and pre-load RAG retriever
     init_db()
-    print("✅  Mosupisi PlantingGuide DB initialised (planting.db)")
-    #print("🌽  LLM backend:", "Groq (llama-3.1-8b-instant)" if os.getenv("GROQ_API_KEY") else "OpenAI (gpt-3.5-turbo)" if os.getenv("OPENAI_API_KEY") else "⚠️  No API key set – /advice will return fallback")
-    print("🌽  LLM backend: Local GGUF (mosupisi-q4.gguf)")
+    print("Mosupisi PlantingGuide DB initialised (planting.db)")
+    print("LLM backend: Local GGUF via mosupisi-llm-service (port 3004)")
+    print("Pre-loading RAG retriever to eliminate cold start...")
+    eager_load()   # loads sentence transformer + ChromaDB — blocks ~25s on first run
     yield
     # Shutdown: nothing to clean up for SQLite
 
@@ -65,7 +55,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Mosupisi PlantingGuide Service",
     description=(
-        "AI-powered planting guide microservice for Mosupisi – "
+        "AI-powered planting guide microservice for Mosupisi - "
         "the Agricultural Extension Agent for smallholder farmers in Lesotho. "
         "Bilingual (English + Sesotho). Crops: maize, sorghum, legumes."
     ),
@@ -74,18 +64,11 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# CORS – allow the React dev server and production build
+# CORS
 # ---------------------------------------------------------------------------
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    os.getenv("FRONTEND_ORIGIN", "http://localhost:3000"),
-]
-
-# Replace the entire CORS section with this:
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],           # ← temporary for testing
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -106,7 +89,7 @@ def health():
         "status":  "ok",
         "service": "Mosupisi PlantingGuide",
         "version": "1.0.0",
-        "llm":     "groq" if os.getenv("GROQ_API_KEY") else "openai" if os.getenv("OPENAI_API_KEY") else "none",
+        "llm":     "local-gguf (mosupisi-llm-service)",
     }
 
 
