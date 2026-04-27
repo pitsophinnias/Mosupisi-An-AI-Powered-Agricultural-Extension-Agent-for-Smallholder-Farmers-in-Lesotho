@@ -157,9 +157,7 @@ const PlantingGuide = () => {
   const _getCoordsForLocation = (locationStr) => {
     if (!locationStr) return null;
     const key = locationStr.toLowerCase().trim();
-    // Exact match first
     if (LESOTHO_COORDS[key]) return LESOTHO_COORDS[key];
-    // Partial match : check if any known town name is contained in the location string
     for (const [town, coords] of Object.entries(LESOTHO_COORDS)) {
       if (key.includes(town) || town.includes(key)) return coords;
     }
@@ -180,36 +178,22 @@ const PlantingGuide = () => {
   }, [user]);
 
   // Fetch per-plant weather after plantings load.
-  // Strategy:
-  //   1. Deduplicate by CSIS town name (not raw location string) : Lipelaneng and
-  //      Butha-Buthe both map to the same CSIS town, so only one fetch needed.
-  //   2. Skip any town that matches the user's default location (already fetched).
-  //   3. Fetch sequentially with a 2s gap so we don't trigger CSIS 504s by
-  //      sending multiple simultaneous requests.
-  //   4. The backend cache (30min TTL) means repeat calls for the same coords
-  //      are instant cache hits : no CSIS call at all.
   useEffect(() => {
     if (!plantings.length) return;
 
     const userLat = user?.farm_lat || -29.3167;
     const userLon = user?.farm_lon || 27.4833;
 
-    // Build a map of CSIS town name → { coords, plantingIds[] }
-    // This deduplicates multiple plants in locations that map to the same CSIS town
     const townMap = {};
     plantings.forEach(p => {
       if (!p.location || p.status === 'harvested') return;
       const coords = _getCoordsForLocation(p.location);
       if (!coords) return;
 
-      // Skip if this is the same as the user's default location (already fetched above)
       const sameAsDefault =
         Math.abs(coords.lat - userLat) < 0.1 &&
         Math.abs(coords.lon - userLon) < 0.1;
-      if (sameAsDefault) {
-        // Reuse liveWeather / liveForecast for this planting : set after liveWeather loads
-        return;
-      }
+      if (sameAsDefault) return;
 
       const key = coords.name;
       if (!townMap[key]) townMap[key] = { coords, plantingIds: [] };
@@ -219,11 +203,10 @@ const PlantingGuide = () => {
     const towns = Object.values(townMap);
     if (!towns.length) return;
 
-    // Sequential fetch with 2s gap between towns
     const fetchSequentially = async () => {
       for (let i = 0; i < towns.length; i++) {
         const { coords, plantingIds } = towns[i];
-        if (i > 0) await new Promise(r => setTimeout(r, 2000)); // 2s gap
+        if (i > 0) await new Promise(r => setTimeout(r, 2000));
         try {
           const [cur, fore] = await Promise.all([
             weatherApi.getCurrent(coords.lat, coords.lon, coords.name),
@@ -245,8 +228,7 @@ const PlantingGuide = () => {
     fetchSequentially();
   }, [plantings, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When liveWeather loads, apply it to any plantings whose location maps
-  // to the same CSIS town as the user's default location
+  // When liveWeather loads, apply it to plantings at the user's default location
   useEffect(() => {
     if (!liveWeather || !plantings.length) return;
     const userLat = user?.farm_lat || -29.3167;
@@ -400,7 +382,6 @@ const PlantingGuide = () => {
         await dbUtils.savePlanting(data);
         showSnackbar(language === 'en' ? 'Activity logged!' : 'Ketso e ngoliloe!');
 
-        // Fetch the advice generated for this action
         try {
           const logsRes = await api.get(`/plantings/${selectedPlanting.id}/actions`);
           const logs = logsRes.data || [];
@@ -409,7 +390,6 @@ const PlantingGuide = () => {
             const latest = logs[0];
             const advice = { en: latest.advice_en, st: latest.advice_st };
             setActionAdvice(advice);
-            // Save to card map so it shows on the card immediately
             setLatestAdviceMap((prev) => ({ ...prev, [selectedPlanting.id]: advice }));
           }
         } catch (logErr) {
@@ -431,11 +411,9 @@ const PlantingGuide = () => {
     }
     setActionText('');
     setActionLoading(false);
-    // Keep dialog open so user sees the advice
   };
 
   const handleOpenActionDialog = (planting) => {
-    // Simple open : no history loading here (history is in separate dialog)
     setSelectedPlanting(planting);
     setActionAdvice(null);
     setActionText('');
@@ -495,11 +473,24 @@ const PlantingGuide = () => {
     }
   };
 
+  // ── normaliseAdvice ────────────────────────────────────────────────────────
+  // Converts inline numbered points ("1. text 2. text") into one-per-line.
+  // Handles duplicate numbers the model sometimes emits ("2. 2. text").
+  // Safe to call on already-formatted text — newlines are preserved as-is.
+  const normaliseAdvice = (text) => {
+    if (!text) return text;
+    // Remove duplicate consecutive numbers e.g. "2. 2." → "2."
+    let t = text.replace(/(\d+)\.\s+\1\./g, '$1.');
+    // Insert newline before each numbered point except the very first
+    t = t.replace(/\s+(?=\d+\.\s)/g, '\n');
+    return t.trim();
+  };
+
   // ── AdviceText ─────────────────────────────────────────────────────────────
   // Renders AI advice with numbered point cards and clean paragraph formatting
   const AdviceText = ({ text }) => {
     if (!text) return null;
-    const lines = text.split('\n').filter(l => l.trim());
+    const lines = normaliseAdvice(text).split('\n').filter(l => l.trim());
     const items = [];
     let plainBuffer = [];
     let pointIndex = 0;
@@ -512,14 +503,18 @@ const PlantingGuide = () => {
     };
 
     lines.forEach((line) => {
-      const numbered    = line.match(/^\d+\.\s+\*\*(.+?)\*\*[:\-]?\s*(.*)/);
-      const numberedPlain = line.match(/^\d+\.\s+([^:*\n]{3,60}):\s*(.*)/);
+      const numbered       = line.match(/^\d+\.\s+\*\*(.+?)\*\*[:\-]?\s*(.*)/);
+      const numberedPlain  = line.match(/^\d+\.\s+([^:*\n]{3,60}):\s*(.*)/);
+      const numberedSimple = line.match(/^\d+\.\s+(.*)/);
       if (numbered) {
         flushPlain();
         items.push({ type: 'point', title: numbered[1], body: numbered[2] });
       } else if (numberedPlain) {
         flushPlain();
         items.push({ type: 'point', title: numberedPlain[1], body: numberedPlain[2] });
+      } else if (numberedSimple) {
+        flushPlain();
+        items.push({ type: 'point', title: null, body: numberedSimple[1] });
       } else {
         plainBuffer.push(line.replace(/\*\*(.*?)\*\*/g, '$1'));
       }
@@ -543,11 +538,13 @@ const PlantingGuide = () => {
                   {num}
                 </Box>
                 <Box>
-                  <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.5 }}>
-                    {item.title}
-                  </Typography>
+                  {item.title && (
+                    <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.5 }}>
+                      {item.title}
+                    </Typography>
+                  )}
                   {item.body && (
-                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65, mt: 0.25 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65, mt: item.title ? 0.25 : 0 }}>
                       {item.body}
                     </Typography>
                   )}
@@ -571,23 +568,25 @@ const PlantingGuide = () => {
   const WeatherOutlookText = ({ text }) => {
     if (!text) return null;
 
-    const lines   = text.split('\n').filter(l => l.trim());
-    const points  = [];
+    const lines  = normaliseAdvice(text).split('\n').filter(l => l.trim());
+    const points = [];
     const summary = [];
 
     lines.forEach((line) => {
-      const numbered = line.match(/^\d+\.\s+\*\*(.+?)\*\*[:\-]?\s*(.*)/);
-      const numberedPlain = line.match(/^\d+\.\s+([^:*\n]{3,80}):\s*(.*)/);
+      const numbered       = line.match(/^\d+\.\s+\*\*(.+?)\*\*[:\-]?\s*(.*)/);
+      const numberedPlain  = line.match(/^\d+\.\s+([^:*\n]{3,80}):\s*(.*)/);
+      const numberedSimple = line.match(/^\d+\.\s+(.*)/);
       if (numbered) {
         points.push({ title: numbered[1].replace(/\s*\(.*?\)\s*/g, ''), body: numbered[2] });
       } else if (numberedPlain) {
         points.push({ title: numberedPlain[1], body: numberedPlain[2] });
+      } else if (numberedSimple) {
+        points.push({ title: null, body: numberedSimple[1] });
       } else if (line.toLowerCase().includes('in summary') || line.toLowerCase().includes('overall')) {
         summary.push(line.replace(/\*\*(.*?)\*\*/g, '$1'));
       }
     });
 
-    // If no numbered points found, just render as clean paragraphs
     if (points.length === 0) {
       return (
         <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
@@ -606,11 +605,13 @@ const PlantingGuide = () => {
               {icons[i] || '🌤️'}
             </Typography>
             <Box>
-              <Typography variant="body2" fontWeight={700} color="#1565c0" sx={{ lineHeight: 1.4 }}>
-                {p.title}
-              </Typography>
+              {p.title && (
+                <Typography variant="body2" fontWeight={700} color="#1565c0" sx={{ lineHeight: 1.4 }}>
+                  {p.title}
+                </Typography>
+              )}
               {p.body && (
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6, mt: 0.2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6, mt: p.title ? 0.2 : 0 }}>
                   {p.body}
                 </Typography>
               )}
@@ -629,8 +630,6 @@ const PlantingGuide = () => {
   };
 
   // ── WeatherAdviceStrip ────────────────────────────────────────────────────
-  // Generates instant rule-based weather advice for a specific crop + stage
-  // using the live weather data already fetched. No API call : pure logic.
   const getWeatherAdvice = (crop, stage, weather, forecast) => {
     if (!weather) return null;
 
@@ -645,8 +644,6 @@ const PlantingGuide = () => {
 
     const isRainy    = rain > 5 || desc.includes('rain') || desc.includes('thunder') || desc.includes('shower');
     const isWindy    = wind > 8;
-    // Only trigger frost if we have a real temperature reading (not NASA POWER derived midpoint)
-    // NASA POWER midpoints are often 0°C when min=-5, max=5 : use source check
     const isNASA     = (weather.source || '').toLowerCase().includes('nasa');
     const isFrost    = temp !== null && temp <= 5 && (!isNASA || temp <= 2);
     const isHot      = temp !== null && temp >= 35;
@@ -655,7 +652,6 @@ const PlantingGuide = () => {
 
     const alerts = [];
 
-    // Rain advice : context of watering and field work
     if (isRainy) {
       alerts.push({ icon: '🌧️', color: '#1565c0', bg: '#e3f2fd',
         en: `Rain today : no need to irrigate. Hold off on foliar feeding until leaves are dry.`,
@@ -670,14 +666,12 @@ const PlantingGuide = () => {
         st: `Maemo a lokile ho nosetsa kapa ho sebelisa manyolo a makhasi kajeno.` });
     }
 
-    // Frost risk
     if (isFrost) {
       alerts.push({ icon: '🥶', color: '#1565c0', bg: '#e3f2fd',
         en: `Frost risk at ${temp}°C tonight : cover ${crop} seedlings or young plants if possible.`,
         st: `Kotsing ea shelwe ha ${temp}°C : ко${crop} e nyane bosiu haeba ho khoneha.` });
     }
 
-    // Heat stress at critical stages
     if (isHot && stressStage) {
       alerts.push({ icon: '🌡️', color: '#c62828', bg: '#ffebee',
         en: `${temp}°C during ${stage} : ${crop} needs water urgently. Irrigate early morning before 8am.`,
@@ -688,14 +682,12 @@ const PlantingGuide = () => {
         st: `Mocheso o phahami (${temp}°C) : nosetsa ${crop} hoseng ho fokotsa kotsing ea mocheso.` });
     }
 
-    // Humidity and disease risk
     if (isHumid && !isRainy) {
       alerts.push({ icon: '💧', color: '#6a1b9a', bg: '#f3e5f5',
         en: `High humidity (${Math.round(humid)}%) : inspect ${crop} leaves for early signs of fungal disease.`,
         st: `Kelello e phahami (${Math.round(humid)}%) : hlahloba makhasi a ${crop} bakeng sa mafu a fungal.` });
     }
 
-    // Upcoming rain : field work timing
     if (forecast?.days?.length > 0) {
       const rainDays = forecast.days.slice(0, 4).filter(d =>
         (d.rainfall_mm || 0) > 3 || (d.description || '').toLowerCase().includes('rain')
@@ -714,7 +706,6 @@ const PlantingGuide = () => {
 
   const WeatherAdviceStrip = ({ planting }) => {
     const stage = getCurrentStage(planting);
-    // Use plant-specific weather if available, otherwise fall back to user's location weather
     const pw      = plantWeatherMap[planting.id];
     const weather = pw?.weather || liveWeather;
     const forecast = pw?.forecast || liveForecast;
@@ -814,7 +805,6 @@ const PlantingGuide = () => {
             </Grid>
           </Grid>
 
-          {/* Latest advice : shown after logging an activity */}
           {latestAdviceMap[planting.id] && (
             <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 2 }}>
               <Typography variant="caption" fontWeight={700} color="success.main" display="block" sx={{ mb: 0.5 }}>
@@ -826,7 +816,6 @@ const PlantingGuide = () => {
             </Box>
           )}
 
-          {/* Weather advice : uses plant's location weather, falls back to user location */}
           {(plantWeatherMap[planting.id] || liveWeather) && planting.status !== 'harvested' && (
             <WeatherAdviceStrip planting={planting} />
           )}
@@ -958,7 +947,7 @@ const PlantingGuide = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Log Activity Dialog : clean input + advice only */}
+      {/* Log Activity Dialog */}
       <Dialog open={openActionDialog} onClose={() => { setOpenActionDialog(false); setActionAdvice(null); }} maxWidth="sm" fullWidth>
         <DialogTitle>
           {language === 'en' ? 'Log Activity' : 'Ngola Ketso'}
@@ -1005,7 +994,7 @@ const PlantingGuide = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Activity History Dialog : opened separately via History icon */}
+      {/* Activity History Dialog */}
       <Dialog open={openHistoryDialog} onClose={() => setOpenHistoryDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           {language === 'en' ? 'Activity History' : 'Histori ea Liketso'}

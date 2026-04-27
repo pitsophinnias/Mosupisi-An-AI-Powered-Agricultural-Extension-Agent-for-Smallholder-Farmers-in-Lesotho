@@ -1,19 +1,23 @@
 import os
+import re
 import logging
+import httpx
+from pathlib import Path
 
 os.environ["HF_HUB_OFFLINE"] = "1"  # use cached model
 
 logger = logging.getLogger(__name__)
 
 # ── Nothing heavy is imported or instantiated at module level ──────────────────
-# All ML objects (embeddings, vectorstore, retriever, llm) are created lazily
-# on the first request. This lets the server start instantly without needing
-# the full model in RAM up front.
+# All ML objects (embeddings, vectorstore, retriever) are created lazily
+# on the first request.
 
-_embeddings   = None
-_vectorstore  = None
-_retriever    = None
-_llm          = None
+_embeddings  = None
+_vectorstore = None
+_retriever   = None
+
+# ── LLM service URL ───────────────────────────────────────────────────────────
+LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://localhost:3004")
 
 
 def _get_embeddings():
@@ -56,57 +60,54 @@ def _get_retriever():
     return _retriever
 
 
-def _get_llm():
-    global _llm
-    if _llm is not None:
-        return _llm
-    model_path = "models/mosupisi-q4.gguf"
-    if not os.path.exists(model_path):
-        logger.warning(f"LLaMA model not found at {model_path} — using fallback answers")
-        return None
+# ── LLM inference via dedicated service ───────────────────────────────────────
+
+def generate_with_slm(prompt_text: str, max_tokens: int = 512, temperature: float = 0.4) -> str:
+    """Send a prompt to the LLM service and return the generated text."""
     try:
-        from llama_cpp import Llama
-        logger.info(f"Loading LLaMA model from {model_path}...")
-        _llm = Llama(
-            model_path=model_path,
-            n_ctx=2048,
-            n_threads=4,
-            verbose=False,
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(
+                f"{LLM_SERVICE_URL}/infer",
+                json={
+                    "prompt":      prompt_text,
+                    "max_tokens":  max_tokens,
+                    "temperature": temperature,
+                    "stop":        ["[INST]", "</s>", "###"],
+                },
+            )
+            response.raise_for_status()
+            text = response.json()["text"]
+            # Safety cleanup — LLM service already strips these but belt-and-braces
+            for artifact in ["[/INST]", "[INST]", "</s>", "###", "[/ROLE]", "[OUTCOME]"]:
+                text = text.replace(artifact, "")
+            text = text.strip()
+            if not text:
+                logger.warning(f"LLM service returned empty text for prompt starting: {prompt_text[:80]!r}")
+            else:
+                logger.info(f"LLM response ({len(text)} chars): {text[:80]!r}")
+            return text
+    except httpx.ConnectError:
+        logger.error(
+            f"Cannot reach LLM service at {LLM_SERVICE_URL}. "
+            "Is mosupisi-llm-service running on port 3004?"
         )
-        logger.info("LLaMA model loaded successfully")
+        return (
+            "Advisory information is temporarily unavailable — "
+            "the LLM service is not running. "
+            "Please start mosupisi-llm-service and try again."
+        )
     except Exception as e:
-        logger.error(f"Failed to load LLaMA model: {e} — using fallback answers")
-        _llm = None
-    return _llm
+        logger.error(f"LLM service call failed: {e}")
+        return (
+            "Could not generate advice at this time. "
+            "Please try again or contact your local extension officer."
+        )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def generate_with_slm(prompt_text: str) -> str:
-    llm = _get_llm()
-    if llm is None:
-        return (
-            "Advisory information is temporarily unavailable. "
-            "Please consult your local extension officer or refer to the "
-            "Lesotho Meteorological Services Agromet Bulletin for current guidance."
-        )
-    try:
-        output = llm(
-            prompt_text,
-            max_tokens=512,
-            temperature=0.7,
-            top_p=0.8,
-            top_k=20,
-            stop=["<|im_end|>", "<|endoftext|>"],
-        )
-        return output["choices"][0]["text"].strip()
-    except Exception as e:
-        logger.error(f"LLM inference failed: {e}")
-        return "Could not generate a response at this time. Please try again later."
-
-
 def get_context(question: str) -> tuple[str, list[str]]:
-    """Retrieve relevant chunks from ChromaDB. Returns empty strings if unavailable."""
+    """Retrieve relevant chunks from ChromaDB. Returns empty string if unavailable."""
     retriever = _get_retriever()
     if retriever is None:
         return "", ["Lesotho Meteorological Services Agromet Bulletin"]
@@ -118,6 +119,74 @@ def get_context(question: str) -> tuple[str, list[str]]:
     except Exception as e:
         logger.error(f"Retrieval failed: {e}")
         return "", ["Lesotho Meteorological Services Agromet Bulletin"]
+
+
+def _detect_repetition(text: str) -> bool:
+    """Detect if the model is looping by checking for repeated phrases."""
+    words = text.split()
+    if len(words) < 10:
+        return False
+    for i in range(len(words) - 4):
+        phrase = " ".join(words[i:i+4])
+        if text.count(phrase) > 3:
+            return True
+    return False
+
+
+def _translate_to_sesotho(english_text: str) -> str:
+    """
+    Translate English agricultural advice to Sesotho via the LLM service.
+    Uses point-by-point translation to minimise hallucination risk.
+    Falls back to English if translation quality is poor.
+    """
+    if not english_text or not english_text.strip():
+        return english_text
+
+    points = re.split(r'(?=\d+\.\s+\*\*)', english_text.strip())
+    points = [p.strip() for p in points if p.strip()]
+
+    if len(points) <= 1:
+        first_400 = english_text[:400]
+        prompt = (
+            "[INST] Translate this short farming advice from English to Sesotho (Lesotho). "
+            "Write ONLY the translation. Stop after one sentence per point. "
+            "Do not repeat any phrase.\n\n"
+            f"{first_400}\n\nSesotho: [/INST]"
+        )
+        result = generate_with_slm(prompt, max_tokens=200, temperature=0.1)
+        if _detect_repetition(result) or len(result) > len(first_400) * 2.5:
+            return f"[Sesotho translation unavailable]\n\n{english_text}"
+        return result
+
+    translated_points = []
+    for point in points:
+        m = re.match(r'(\d+\.\s+\*\*[^*]+\*\*:?\s*)(.*)', point, re.DOTALL)
+        if m:
+            prefix = m.group(1)
+            body   = m.group(2).strip()[:300]
+        else:
+            prefix = ""
+            body   = point[:300]
+
+        prompt = (
+            "[INST] Translate ONLY this one sentence of farming advice to Sesotho (Lesotho). "
+            "Write a single short sentence. Do not repeat words. Stop immediately after one sentence.\n\n"
+            f"English: {body}\n\nSesotho: [/INST]"
+        )
+        result = generate_with_slm(prompt, max_tokens=120, temperature=0.1)
+
+        if _detect_repetition(result) or len(result) > len(body) * 3:
+            translated_points.append(point)
+        else:
+            translated_points.append(f"{prefix}{result}" if prefix else result)
+
+    result = "\n\n".join(translated_points)
+
+    if _detect_repetition(result):
+        logger.warning("Sesotho translation detected repetition in final output — returning English")
+        return english_text
+
+    return result
 
 
 # ── get_advice (used by /plantings/{id}/advice) ───────────────────────────────
@@ -142,67 +211,45 @@ def get_advice(
     context, sources = get_context(question)
     weather_context, _ = get_context(f"Weather outlook for {location}")
 
+    en_prompt = (
+        f"[INST] You are Mosupisi, an expert agricultural advisor for smallholder farmers in Lesotho.\n\n"
+        f"SPECIFIC PLANT DETAILS:\n"
+        f"- Crop: {crop}\n"
+        f"- Current growth stage: {current_stage}\n"
+        f"- Location: {location}\n"
+        f"- Field size: {area}\n"
+        f"- Days since planting: {days_since}\n\n"
+        f"Give advice ONLY for {crop} at the {current_stage} stage in {location}.\n"
+        f"Do NOT give generic farming advice. Every recommendation must be specific to {crop} at {current_stage}.\n\n"
+        f"Use ONLY the following context from Lesotho Meteorological Services bulletins:\n{context}\n\n"
+        f"Respond with exactly 4 numbered points. Each point must follow this format:\n"
+        f"1. **Point Title**: One or two specific sentences of advice.\n"
+        f"2. **Point Title**: One or two specific sentences of advice.\n"
+        f"3. **Point Title**: One or two specific sentences of advice.\n"
+        f"4. **Point Title**: One or two specific sentences of advice.\n\n"
+        f"Answer: [/INST]"
+    )
+
+    advice_en = generate_with_slm(en_prompt)
+
+    weather_en_prompt = (
+        f"[INST] Summarize the weather outlook for {location} in English.\n"
+        f"Focus specifically on how conditions affect {crop} at the {current_stage} stage.\n\n"
+        f"Context:\n{weather_context}\n\n"
+        f"Respond with 3 numbered points:\n"
+        f"1. **Current Conditions**: ...\n"
+        f"2. **Rainfall Outlook**: ...\n"
+        f"3. **Impact on {crop}**: ...\n\n"
+        f"Summary: [/INST]"
+    )
+
+    weather_en = generate_with_slm(weather_en_prompt)
+
     if language == "st":
-        prompt = f"""Ke Mosupisi, moeletsi oa temo bakeng sa balimi ba Lesotho.
-
-SEJALO: {crop}
-BOEMO HA JOALE: {current_stage}
-SEBAKA: {location}
-SEBAKA SA TŠIMO: {area}
-MATSATSI HO JALWA: {days_since}
-
-Fana ka keletso e hlakileng bakeng sa {crop} FEELA sebakeng sa {current_stage} {location}.
-Se arabe ka kakaretso ea temo — bua ka {crop} sebakeng sa {current_stage} feela.
-
-Context:
-{context}
-
-Potso: {question}
-
-Karabo (e hlakileng bakeng sa {crop} sebakeng sa {current_stage}):"""
-        advice_st = generate_with_slm(prompt)
-        advice_en = advice_st
-
-        weather_prompt = f"""Akaretsa boemo ba leea bakeng sa {location} ka Sesotho.
-Bua haholo-holo ka hore na leea le amana joang le {crop} sebakeng sa {current_stage}.
-
-Context:
-{weather_context}
-
-Kakaretso:"""
-        weather_st = generate_with_slm(weather_prompt)
-        weather_en = weather_st
-
+        advice_st  = _translate_to_sesotho(advice_en)
+        weather_st = _translate_to_sesotho(weather_en)
     else:
-        prompt = f"""You are Mosupisi, an expert agricultural advisor for smallholder farmers in Lesotho.
-
-SPECIFIC PLANT DETAILS:
-- Crop: {crop}
-- Current growth stage: {current_stage}
-- Location: {location}
-- Field size: {area}
-- Days since planting: {days_since}
-
-Give advice ONLY for {crop} at the {current_stage} stage in {location}.
-Do NOT give generic farming advice. Every recommendation must be specific to {crop} at {current_stage}.
-
-Use ONLY the following context from Lesotho Meteorological Services bulletins:
-{context}
-
-Question: {question}
-
-Answer (specific to {crop} at {current_stage} stage in {location}):"""
-        advice_en = generate_with_slm(prompt)
-        advice_st = advice_en
-
-        weather_prompt = f"""Summarize the weather outlook for {location} in English.
-Focus on how current weather conditions affect {crop} at the {current_stage} stage.
-
-Context:
-{weather_context}
-
-Summary (relevant to {crop} at {current_stage}):"""
-        weather_en = generate_with_slm(weather_prompt)
+        advice_st  = advice_en
         weather_st = weather_en
 
     rotation_map = {
@@ -233,20 +280,28 @@ def get_weather_context() -> dict:
 
     def gen(p): return generate_with_slm(p)
 
+    rainfall_en    = gen(f"[INST] Summarize the rainfall situation in Lesotho in 1-2 sentences. Be concise.\n\nContext:\n{context}\n\nSummary: [/INST]")
+    temperature_en = gen(f"[INST] Summarize the temperature situation in Lesotho in 1-2 sentences. Be concise.\n\nContext:\n{context}\n\nSummary: [/INST]")
+    outlook_en     = gen(f"[INST] Short-term weather outlook for Lesotho farmers in 1-2 sentences.\n\nContext:\n{context}\n\nOutlook: [/INST]")
+    seasonal_en    = gen(f"[INST] Seasonal outlook for Lesotho farmers in 1-2 sentences.\n\nContext:\n{context}\n\nSeasonal outlook: [/INST]")
+    advisory_en    = gen(f"[INST] Main farming advisory for Lesotho farmers this period in 1-2 sentences.\n\nContext:\n{context}\n\nAdvisory: [/INST]")
+
+    def tr(text): return _translate_to_sesotho(text)
+
     return {
         "bulletin_period":        "Current Dekad",
         "bulletin_number":        "Latest",
         "season":                 "2025/2026",
-        "rainfall_summary_en":    gen(f"Summarize the rainfall situation in Lesotho. Be concise.\n\nContext:\n{context}\n\nSummary:"),
-        "rainfall_summary_st":    gen(f"Akaretsa boemo ba pula Lesotho. E be khutsoanyane.\n\nContext:\n{context}\n\nKakaretso:"),
-        "temperature_summary_en": gen(f"Summarize the temperature situation in Lesotho. Be concise.\n\nContext:\n{context}\n\nSummary:"),
-        "temperature_summary_st": gen(f"Akaretsa boemo ba mocheso Lesotho. E be khutsoanyane.\n\nContext:\n{context}\n\nKakaretso:"),
-        "outlook_en":             gen(f"Short-term weather outlook for Lesotho in English.\n\nContext:\n{context}\n\nOutlook:"),
-        "outlook_st":             gen(f"Boemo ba leea ba nakoana bakeng sa Lesotho ka Sesotho.\n\nContext:\n{context}\n\nBoemo:"),
-        "seasonal_outlook_en":    gen(f"Seasonal outlook for Lesotho farmers in English.\n\nContext:\n{context}\n\nSeasonal outlook:"),
-        "seasonal_outlook_st":    gen(f"Boemo ba selemo bakeng sa balimi ba Lesotho ka Sesotho.\n\nContext:\n{context}\n\nBoemo ba selemo:"),
-        "advisory_en":            gen(f"Main advisory for Lesotho farmers this dekad in English.\n\nContext:\n{context}\n\nAdvisory:"),
-        "advisory_st":            gen(f"Keletso e ka sehloohong bakeng sa balimi ba Lesotho ka Sesotho.\n\nContext:\n{context}\n\nKeletso:"),
+        "rainfall_summary_en":    rainfall_en,
+        "rainfall_summary_st":    tr(rainfall_en),
+        "temperature_summary_en": temperature_en,
+        "temperature_summary_st": tr(temperature_en),
+        "outlook_en":             outlook_en,
+        "outlook_st":             tr(outlook_en),
+        "seasonal_outlook_en":    seasonal_en,
+        "seasonal_outlook_st":    tr(seasonal_en),
+        "advisory_en":            advisory_en,
+        "advisory_st":            tr(advisory_en),
         "wsi_value":              "N/A",
         "source":                 "Lesotho Meteorological Services Agromet Bulletin",
     }
