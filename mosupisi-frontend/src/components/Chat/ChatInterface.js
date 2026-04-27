@@ -8,15 +8,25 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import axios from 'axios';
 import { weatherApi } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 const api = axios.create({
   baseURL: 'http://localhost:3002/api',
-  timeout: 20000,
+  // Fix: 120s to handle cold-start sentence transformer load (~25s) + inference
+  timeout: 120000,
 });
 
 function buildWeatherSummary(current, forecast) {
@@ -31,7 +41,7 @@ function buildWeatherSummary(current, forecast) {
     forecast.days.slice(0, 3).forEach((d) => {
       let entry = `  ${d.date}: ${d.temp_min_c}–${d.temp_max_c}°C`;
       if (d.rainfall_mm > 0) entry += `, rain ${d.rainfall_mm} mm`;
-      if (d.farming_note)    entry += ` — ${d.farming_note}`;
+      if (d.farming_note)    entry += ` : ${d.farming_note}`;
       lines.push(entry);
     });
   }
@@ -39,16 +49,23 @@ function buildWeatherSummary(current, forecast) {
 }
 
 const ChatInterface = () => {
-  const [messages,       setMessages]       = useState([]);
-  const [input,          setInput]          = useState('');
-  const [isLoading,      setIsLoading]      = useState(false);
-  const [error,          setError]          = useState(null);
-  const [weatherSummary, setWeatherSummary] = useState(null);
-  const [weatherStatus,  setWeatherStatus]  = useState('loading');
-  const [currentWeather, setCurrentWeather] = useState(null);
+  const { user } = useAuth();
+  // Resolve display name: prefer full name, fall back to first_name, then username
+  const farmerName = user?.name || user?.first_name
+    ? [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.name
+    : null;
+
+  const [messages,           setMessages]           = useState([]);
+  const [input,              setInput]              = useState('');
+  const [isLoading,          setIsLoading]          = useState(false);
+  const [error,              setError]              = useState(null);
+  const [weatherSummary,     setWeatherSummary]     = useState(null);
+  const [weatherStatus,      setWeatherStatus]      = useState('loading');
+  const [currentWeather,     setCurrentWeather]     = useState(null);
+  const [clearDialogOpen,    setClearDialogOpen]    = useState(false);
+  const [hoveredMessageIdx,  setHoveredMessageIdx]  = useState(null);
 
   const messagesEndRef    = useRef(null);
-  // Ref keeps getAIResponse's closure from going stale when weatherSummary updates
   const weatherSummaryRef = useRef(null);
 
   useEffect(() => {
@@ -59,7 +76,22 @@ const ChatInterface = () => {
     localStorage.setItem('chat_history', JSON.stringify(updated));
   }, []);
 
-  // ── Wrapped in useCallback so it can be listed as a dep in the load effect ──
+  // ── Delete a single message ───────────────────────────────────────────────
+  const handleDeleteMessage = useCallback((index) => {
+    setMessages((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      saveChat(updated);
+      return updated;
+    });
+  }, [saveChat]);
+
+  // ── Clear all messages ────────────────────────────────────────────────────
+  const handleClearChat = useCallback(() => {
+    setMessages([]);
+    localStorage.removeItem('chat_history');
+    setClearDialogOpen(false);
+  }, []);
+
   const getAIResponse = useCallback(async (question, context, currentMessages) => {
     setIsLoading(true);
     setError(null);
@@ -72,6 +104,7 @@ const ChatInterface = () => {
         context,
         language:       'en',
         weatherContext: weatherSummaryRef.current || null,
+        farmerName:     farmerName || null,
       };
 
       const { data } = await api.post('/chat/ask', payload);
@@ -93,6 +126,8 @@ const ChatInterface = () => {
       let errorMessage = '';
       if (err.message === 'offline' || !navigator.onLine) {
         errorMessage = "You're offline. Please check your connection and try again.";
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMessage = 'Response is taking longer than expected, the AI model may still be warming up. Please try again in a moment.';
       } else if (err.response) {
         errorMessage = err.response.data.message || 'Server error. Please try again later.';
       } else if (err.request) {
@@ -145,7 +180,7 @@ const ChatInterface = () => {
     };
 
     loadInitialMessages();
-  }, [getAIResponse]); // now safe: getAIResponse is stable via useCallback
+  }, [getAIResponse]);
 
   // ── Weather context ───────────────────────────────────────────────────────
   const loadWeatherContext = useCallback(async () => {
@@ -192,29 +227,26 @@ const ChatInterface = () => {
   };
 
   return (
-    <Box
-      sx={{
+    <Box sx={{
+      display:         'flex',
+      flexDirection:   'column',
+      height:          '80vh',
+      backgroundColor: '#f0f2f5',
+      borderRadius:    2,
+      overflow:        'hidden',
+    }}>
+
+      {/* Weather status bar + clear button */}
+      <Box sx={{
+        px:              2,
+        py:              0.75,
+        backgroundColor: weatherStatus === 'ready' ? '#e8f5e9' : '#f5f5f5',
+        borderBottom:    '1px solid #e0e0e0',
         display:         'flex',
-        flexDirection:   'column',
-        height:          '80vh',
-        backgroundColor: '#f0f2f5',
-        borderRadius:    2,
-        overflow:        'hidden',
-      }}
-    >
-      {/* Weather status bar */}
-      <Box
-        sx={{
-          px:              2,
-          py:              0.75,
-          backgroundColor: weatherStatus === 'ready' ? '#e8f5e9' : '#f5f5f5',
-          borderBottom:    '1px solid #e0e0e0',
-          display:         'flex',
-          alignItems:      'center',
-          gap:             1,
-          flexWrap:        'wrap',
-        }}
-      >
+        alignItems:      'center',
+        gap:             1,
+        flexWrap:        'wrap',
+      }}>
         <WbSunnyIcon
           fontSize="small"
           sx={{ color: weatherStatus === 'ready' ? '#2e7d32' : '#9e9e9e' }}
@@ -240,8 +272,30 @@ const ChatInterface = () => {
         )}
         {weatherStatus === 'unavailable' && (
           <Typography variant="caption" color="textSecondary">
-            ⚠️ Weather context offline — answers may be general
+            ⚠️ Weather context offline. Answers may be general
           </Typography>
+        )}
+
+        {/* Spacer + clear all button */}
+        <Box sx={{ flex: 1 }} />
+        {messages.length > 0 && (
+          <Button
+            size="small"
+            onClick={() => setClearDialogOpen(true)}
+            startIcon={<DeleteSweepIcon sx={{ fontSize: 15 }} />}
+            sx={{
+              color:          '#9e9e9e',
+              fontSize:       '0.7rem',
+              textTransform:  'none',
+              minHeight:      0,
+              py:             0.25,
+              px:             1,
+              borderRadius:   1,
+              '&:hover':      { color: '#d32f2f', bgcolor: '#ffebee' },
+            }}
+          >
+            Clear chat
+          </Button>
         )}
       </Box>
 
@@ -250,16 +304,48 @@ const ChatInterface = () => {
         {messages.map((msg, index) => (
           <Box
             key={index}
+            onMouseEnter={() => setHoveredMessageIdx(index)}
+            onMouseLeave={() => setHoveredMessageIdx(null)}
             sx={{
               display:        'flex',
-              justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+              flexDirection:  msg.sender === 'user' ? 'row-reverse' : 'row',
+              alignItems:     'flex-start',
+              justifyContent: 'flex-start',
+              gap:            0.5,
               mb:             2,
             }}
           >
+            {/* Delete button: sits beside the bubble, visible on hover */}
+            <Box sx={{
+              width:          28,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              pt:             1,
+              opacity:        hoveredMessageIdx === index ? 1 : 0,
+              transition:     'opacity 0.15s',
+              flexShrink:     0,
+            }}>
+              <Tooltip title="Delete message">
+                <IconButton
+                  size="small"
+                  onClick={() => handleDeleteMessage(index)}
+                  sx={{
+                    width:     26,
+                    height:    26,
+                    color:     '#bdbdbd',
+                    '&:hover': { color: '#d32f2f', bgcolor: '#ffebee' },
+                  }}
+                >
+                  <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
             <Paper
               sx={{
                 p:               2,
-                maxWidth:        '70%',
+                maxWidth:        '75%',
                 backgroundColor: msg.sender === 'user' ? '#dcf8c6' : 'white',
                 borderRadius:    2,
                 boxShadow:       1,
@@ -280,6 +366,8 @@ const ChatInterface = () => {
                   Sources: {msg.sources.join(', ')}
                 </Typography>
               )}
+
+    
             </Paper>
           </Box>
         ))}
@@ -309,14 +397,12 @@ const ChatInterface = () => {
       </Box>
 
       {/* Input */}
-      <Box
-        sx={{
-          display:         'flex',
-          p:               2,
-          backgroundColor: 'white',
-          borderTop:       '1px solid #e0e0e0',
-        }}
-      >
+      <Box sx={{
+        display:         'flex',
+        p:               2,
+        backgroundColor: 'white',
+        borderTop:       '1px solid #e0e0e0',
+      }}>
         <TextField
           fullWidth
           variant="outlined"
@@ -342,6 +428,27 @@ const ChatInterface = () => {
           <SendIcon />
         </IconButton>
       </Box>
+
+      {/* Clear all confirmation dialog */}
+      <Dialog
+        open={clearDialogOpen}
+        onClose={() => setClearDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Clear chat history?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This will permanently delete all {messages.length} messages. This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setClearDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleClearChat} color="error" variant="contained">
+            Clear all
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

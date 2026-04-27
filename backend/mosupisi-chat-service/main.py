@@ -1,27 +1,22 @@
-"""
-backend/mosupisi-chat-service/main.py
-
-Python AI service for Mosupisi chat.
-Uses mosupisi-q4.gguf (llama-cpp) + ChromaDB RAG, reusing the
-planting guide's already-downloaded model and vector store.
-
-Receives from index.js:
-  POST /api/chat
-  {
-    "message": "Should I plant maize this week?",
-    "conversation_id": "conv-123",
-    "user_id": "user-abc",
-    "system_note": "[Weather Context]...",   # from weather service
-    "language": "en",
-    "context": { "crop": "maize", ... }      # from frontend
-  }
-"""
+# backend/mosupisi-chat-service/main.py
+#
+# Python AI service for Mosupisi chat.
+# Uses ChromaDB RAG (from planting guide) and delegates all LLM inference
+# to mosupisi-llm-service (port 3004). No model loaded here.
+#
+# Routes:
+#   POST /api/chat/ask  <- called by index.js gateway
+#     { question, language, weatherContext, context, farmer_id }
+#   POST /api/chat      <- called by dashboard directly
+#     { message, conversation_id, user_id, system_note, language, context }
+#   GET  /health        <- checked by index.js /api/health
 
 import logging
 import os
 from pathlib import Path
 from typing import Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -33,16 +28,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Paths — share model + vector store with planting guide service
+# Paths — share vector store + embeddings with planting guide service
 # ---------------------------------------------------------------------------
 
 SERVICE_DIR  = Path(__file__).parent
 PLANTING_DIR = SERVICE_DIR.parent / "mosupisi-planting-guide-service"
 
-MODEL_PATH   = Path(os.getenv(
-    "LLAMA_MODEL_PATH",
-    str(PLANTING_DIR / "models" / "mosupisi-q4.gguf")
-))
 CHROMA_DIR   = Path(os.getenv(
     "CHROMA_DIR",
     str(PLANTING_DIR / "chroma_db")
@@ -52,36 +43,14 @@ EMBEDDER_DIR = Path(os.getenv(
     str(PLANTING_DIR / "models" / "sentence_transformer")
 ))
 
+# LLM service
+LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://localhost:3004")
+
 # ---------------------------------------------------------------------------
-# Lazy singletons — nothing loads at import time
+# Lazy retriever singleton
 # ---------------------------------------------------------------------------
 
-_llm      = None
 _retriever = None
-
-
-def _get_llm():
-    global _llm
-    if _llm is not None:
-        return _llm
-    if not MODEL_PATH.exists():
-        logger.warning(f"Model not found at {MODEL_PATH}")
-        return None
-    try:
-        from llama_cpp import Llama
-        logger.info(f"Loading LLM: {MODEL_PATH}")
-        _llm = Llama(
-            model_path   = str(MODEL_PATH),
-            n_ctx        = 2048,
-            n_threads    = 4,
-            n_gpu_layers = 0,
-            verbose      = False,
-        )
-        logger.info("LLM ready")
-    except Exception as e:
-        logger.error(f"LLM load failed: {e}")
-        _llm = None
-    return _llm
 
 
 def _get_retriever():
@@ -102,7 +71,7 @@ def _get_retriever():
             model_kwargs = {"device": "cpu"},
         )
         vs = Chroma(persist_directory=str(CHROMA_DIR), embedding_function=embeddings)
-        _retriever = vs.as_retriever(search_kwargs={"k": 4})
+        _retriever = vs.as_retriever(search_kwargs={"k": 2})
         logger.info("RAG retriever ready")
     except Exception as e:
         logger.error(f"Retriever init failed: {e}")
@@ -122,10 +91,59 @@ def _retrieve(query: str) -> str:
         return ""
 
 # ---------------------------------------------------------------------------
-# App
+# LLM service call
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Mosupisi AI Chat Service", version="2.0.0")
+def _call_llm(prompt: str) -> str:
+    try:
+        with httpx.Client(timeout=110.0) as client:  # 110s < index.js 120s gateway timeout
+            response = client.post(
+                f"{LLM_SERVICE_URL}/infer",
+                json={
+                    "prompt":      prompt,
+                    "max_tokens":  384,   # chat should be concise; shorter = faster
+                    "temperature": 0.4,
+                    "stop":        ["[INST]", "</s>", "###"],
+                },
+            )
+            response.raise_for_status()
+            return response.json()["text"]
+    except httpx.ConnectError:
+        logger.error(
+            f"Cannot reach LLM service at {LLM_SERVICE_URL}. "
+            "Is mosupisi-llm-service running on port 3004?"
+        )
+        return None
+    except httpx.TimeoutException:
+        logger.error(
+            f"LLM service timed out after 110s. "
+            "The model may still be loading — try again in 30s."
+        )
+        return None
+    except Exception as e:
+        logger.error(f"LLM service error: {e}")
+        return None
+
+# ---------------------------------------------------------------------------
+# App — eager-load retriever on startup to eliminate cold-start latency
+# ---------------------------------------------------------------------------
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-load the RAG retriever so the first user message is fast."""
+    logger.info("Chat service starting — pre-loading RAG retriever...")
+    _get_retriever()   # blocks until sentence transformer is loaded (~25s)
+    if _retriever is not None:
+        logger.info("RAG retriever ready — chat service warm and ready")
+    else:
+        logger.warning("RAG retriever not available — will use LLM without context")
+    yield
+    logger.info("Chat service shutting down")
+
+
+app = FastAPI(title="Mosupisi AI Chat Service", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins = os.getenv(
@@ -142,12 +160,15 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 class ChatRequest(BaseModel):
-    message:         str
+    # Accept both "message" (original) and "question" (gateway sends this)
+    message:         Optional[str] = None
+    question:        Optional[str] = None   # alias — gateway sends this field
     conversation_id: Optional[str] = None
     user_id:         Optional[str] = None
     system_note:     Optional[str] = None
     language:        Optional[str] = "en"
     context:         Optional[dict] = None
+    farmer_name:     Optional[str] = None   # user's display name from profile
 
 
 class ChatResponse(BaseModel):
@@ -159,17 +180,31 @@ class ChatResponse(BaseModel):
 # Prompt
 # ---------------------------------------------------------------------------
 
-BASE_PERSONA = (
-    "You are Mosupisi, a knowledgeable and friendly agricultural assistant "
-    "for smallholder farmers in Lesotho. You give practical, specific advice "
-    "on crop planting, pest control, soil health, irrigation, and general farming. "
-    "Always tailor advice to the highland and lowland conditions of Lesotho. "
-    "Be concise and practical."
+BASE_PERSONA_EN = (
+    "You are Mosupisi, an agricultural assistant for smallholder farmers in Lesotho. "
+    "You MUST answer in English only. Do not use any other language. "
+    "Give practical, specific advice on crop planting, pest control, soil health, "
+    "irrigation, and general farming in Lesotho. Be concise and practical."
+)
+
+BASE_PERSONA_ST = (
+    "Ke Mosupisi, moeletsi oa temo bakeng sa balimi ba Lesotho. "
+    "Araba ka Sesotho feela. "
+    "Fana ka keletso e tobileng ka ho jala, likokonyana, mobu le ho nosetsa Lesotho."
 )
 
 
-def _build_prompt(message, context_text, system_note, language, crop_ctx):
-    parts = [BASE_PERSONA]
+def _build_prompt(message, context_text, system_note, language, crop_ctx, farmer_name=None):
+    persona = BASE_PERSONA_ST if language == "st" else BASE_PERSONA_EN
+    parts = [persona]
+
+    # Address the farmer by name if available
+    name = farmer_name.strip() if farmer_name and farmer_name.strip() else None
+    if name:
+        if language == "st":
+            parts.append(f"\nLebitso la molemi: {name}. Araba ka lebitso la hae.")
+        else:
+            parts.append(f"\nThe farmer's name is {name}. Address them by name in your response.")
 
     if crop_ctx:
         crop  = crop_ctx.get("crop", "")
@@ -188,8 +223,11 @@ def _build_prompt(message, context_text, system_note, language, crop_ctx):
             "\nUse the weather context above when it is relevant to the question."
         )
 
+    # Reinforce language at the end of the instruction block
     if language == "st":
-        parts.append("\nAnswer in Sesotho language.")
+        parts.append("\nAraba ka Sesotho feela. Thibela ho sebelisa lipuo tse ling.")
+    else:
+        parts.append("\nRespond in English only. Do not use Chinese, French, or any other language.")
 
     system_block = "\n".join(parts)
 
@@ -198,41 +236,71 @@ def _build_prompt(message, context_text, system_note, language, crop_ctx):
         if context_text else ""
     )
 
+    farmer_label = name if name else "Farmer"
     return (
         f"[INST] {system_block}"
         f"{rag_block}"
-        f"\nFarmer question: {message} [/INST]"
+        f"\n{farmer_label}'s question: {message}\nAnswer: [/INST]"
     )
 
 # ---------------------------------------------------------------------------
-# LLM inference
+# Inference
 # ---------------------------------------------------------------------------
 
-async def run_llm(message, system_note, language, crop_ctx, conv_id):
+def _clean_response(text: str, message: str) -> str:
+    """Remove prompt artifacts the model echoes back."""
+    if not text:
+        return text
+    import re
+    # Strip "Farmer question: ...\n" prefix (model echoes the prompt)
+    text = re.sub(r"^Farmer question:[^\n]*\n+", "", text, flags=re.IGNORECASE)
+    # Strip "Question: ...\n" prefix
+    text = re.sub(r"^Question:[^\n]*\n+", "", text, flags=re.IGNORECASE)
+    # Strip leading "Advice:" or "Answer:" label
+    text = re.sub(r"^(Advice|Answer)\s*:\s*", "", text, flags=re.IGNORECASE)
+    # If model repeated the question verbatim at the start, remove it
+    q = message.strip().rstrip("?").lower()
+    t = text.strip().lower()
+    if t.startswith(q):
+        text = text[len(q):].lstrip("? \n\t:")
+    return text.strip()
+
+
+def _is_wrong_language(text: str, expected_language: str) -> bool:
+    """
+    Detect if the model responded in the wrong language.
+    Chinese, Arabic, Japanese, Korean etc. are clearly wrong for en/st responses.
+    """
+    if not text:
+        return False
+    # Count CJK and other non-Latin script characters
+    non_latin = sum(1 for c in text if ord(c) > 0x2E7F)
+    # If more than 10% of chars are non-Latin, it's the wrong language
+    return non_latin > len(text) * 0.1
+
+
+async def run_llm(message, system_note, language, crop_ctx, conv_id, farmer_name=None):
     rag_text = _retrieve(message)
     sources  = ["Lesotho Agricultural Bulletin"] if rag_text else []
 
-    prompt = _build_prompt(message, rag_text, system_note, language, crop_ctx)
-    llm    = _get_llm()
+    prompt = _build_prompt(message, rag_text, system_note, language, crop_ctx, farmer_name)
 
-    if llm is None:
-        return _fallback(message, crop_ctx, language), sources
+    logger.info(f"Chat inference | conv={conv_id} | {message[:50]}")
+    answer = _call_llm(prompt)
 
-    try:
-        logger.info(f"LLM inference | conv={conv_id} | {message[:50]}")
-        out    = llm(
-            prompt,
-            max_tokens  = 512,
-            temperature = 0.4,
-            top_p       = 0.9,
-            top_k       = 40,
-            stop        = ["[INST]", "</s>", "[/INST]"],
-        )
-        answer = out["choices"][0]["text"].strip()
-        return answer or _fallback(message, crop_ctx, language), sources
-    except Exception as e:
-        logger.error(f"LLM error: {e}")
-        return _fallback(message, crop_ctx, language), sources
+    # Strip any prompt artifacts the model echoed back
+    if answer:
+        answer = _clean_response(answer, message)
+
+    # If the model responded in the wrong language, use the fallback
+    if answer and _is_wrong_language(answer, language):
+        logger.warning(f"Model responded in wrong language — using fallback. Preview: {answer[:60]!r}")
+        answer = None
+
+    if not answer:
+        answer = _fallback(message, crop_ctx, language)
+
+    return answer, sources
 
 
 def _fallback(message, crop_ctx, language):
@@ -272,33 +340,89 @@ def _fallback(message, crop_ctx, language):
 
 @app.get("/health")
 async def health():
+    # Check if LLM service is reachable
+    llm_status = "unknown"
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            r = client.get(f"{LLM_SERVICE_URL}/health")
+            llm_status = "reachable" if r.status_code == 200 else "error"
+    except Exception:
+        llm_status = "unreachable"
+
     return {
-        "status":     "healthy",
-        "service":    "mosupisi-ai-service",
-        "model":      str(MODEL_PATH),
-        "model_found": MODEL_PATH.exists(),
-        "chroma":     str(CHROMA_DIR),
-        "chroma_found": CHROMA_DIR.exists(),
-        "llm_loaded": _llm is not None,
+        "status":          "healthy",
+        "service":         "mosupisi-ai-service",
+        "llm_backend":     "mosupisi-llm-service",
+        "llm_service_url": LLM_SERVICE_URL,
+        "llm_status":      llm_status,
+        "chroma":          str(CHROMA_DIR),
+        "chroma_found":    CHROMA_DIR.exists(),
     }
+
+
+# ---------------------------------------------------------------------------
+# /api/chat/ask — called by the Node.js gateway (index.js)
+# The gateway sends { question, language, weatherContext, context }
+# This route maps those fields to the internal ChatRequest format.
+# ---------------------------------------------------------------------------
+
+class AskRequest(BaseModel):
+    question:       str
+    language:       Optional[str] = "en"
+    weatherContext: Optional[str] = None   # weather summary string from gateway
+    context:        Optional[dict] = None  # crop/stage context
+    farmer_id:      Optional[str] = None
+    farmer_name:    Optional[str] = None   # user's display name from profile
+
+
+class AskResponse(BaseModel):
+    answer:          str
+    sources:         list[str] = []
+    conversation_id: Optional[str] = None
+
+
+@app.post("/api/chat/ask", response_model=AskResponse)
+async def chat_ask(req: AskRequest):
+    """Entry point called by the Node.js gateway (index.js → POST /api/chat/ask)."""
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="question cannot be empty")
+
+    logger.info(
+        f"Ask | farmer={req.farmer_id} | lang={req.language} | "
+        f"weather={'yes' if req.weatherContext else 'no'} | {req.question[:60]}"
+    )
+
+    answer, sources = await run_llm(
+        message      = req.question,
+        system_note  = req.weatherContext,
+        language     = req.language or "en",
+        crop_ctx     = req.context,
+        conv_id      = None,
+        farmer_name  = req.farmer_name,
+    )
+
+    return AskResponse(answer=answer, sources=sources)
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    if not req.message.strip():
-        raise HTTPException(status_code=400, detail="message cannot be empty")
+    # Accept either "message" or "question" field (gateway sends "question")
+    text = (req.message or req.question or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="message or question cannot be empty")
 
     logger.info(
         f"Chat | user={req.user_id} | lang={req.language} | "
-        f"weather={'yes' if req.system_note else 'no'} | {req.message[:60]}"
+        f"weather={'yes' if req.system_note else 'no'} | {text[:60]}"
     )
 
     answer, sources = await run_llm(
-        message     = req.message,
-        system_note = req.system_note,
-        language    = req.language or "en",
-        crop_ctx    = req.context,
-        conv_id     = req.conversation_id,
+        message      = text,
+        system_note  = req.system_note,
+        language     = req.language or "en",
+        crop_ctx     = req.context,
+        conv_id      = req.conversation_id,
+        farmer_name  = req.farmer_name,
     )
 
     return ChatResponse(
