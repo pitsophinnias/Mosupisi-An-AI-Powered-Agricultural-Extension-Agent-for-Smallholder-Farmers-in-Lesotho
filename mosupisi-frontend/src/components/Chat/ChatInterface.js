@@ -21,6 +21,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import axios from 'axios';
 import { weatherApi } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 const api = axios.create({
   baseURL: 'http://localhost:3002/api',
@@ -40,7 +41,7 @@ function buildWeatherSummary(current, forecast) {
     forecast.days.slice(0, 3).forEach((d) => {
       let entry = `  ${d.date}: ${d.temp_min_c}–${d.temp_max_c}°C`;
       if (d.rainfall_mm > 0) entry += `, rain ${d.rainfall_mm} mm`;
-      if (d.farming_note)    entry += ` — ${d.farming_note}`;
+      if (d.farming_note)    entry += ` : ${d.farming_note}`;
       lines.push(entry);
     });
   }
@@ -48,6 +49,12 @@ function buildWeatherSummary(current, forecast) {
 }
 
 const ChatInterface = () => {
+  const { user } = useAuth();
+  // Resolve display name: prefer full name, fall back to first_name, then username
+  const farmerName = user?.name || user?.first_name
+    ? [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.name
+    : null;
+
   const [messages,           setMessages]           = useState([]);
   const [input,              setInput]              = useState('');
   const [isLoading,          setIsLoading]          = useState(false);
@@ -97,6 +104,7 @@ const ChatInterface = () => {
         context,
         language:       'en',
         weatherContext: weatherSummaryRef.current || null,
+        farmerName:     farmerName || null,
       };
 
       const { data } = await api.post('/chat/ask', payload);
@@ -119,7 +127,7 @@ const ChatInterface = () => {
       if (err.message === 'offline' || !navigator.onLine) {
         errorMessage = "You're offline. Please check your connection and try again.";
       } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        errorMessage = 'Response is taking longer than expected — the AI model may still be warming up. Please try again in a moment.';
+        errorMessage = 'Response is taking longer than expected, the AI model may still be warming up. Please try again in a moment.';
       } else if (err.response) {
         errorMessage = err.response.data.message || 'Server error. Please try again later.';
       } else if (err.request) {
@@ -264,22 +272,30 @@ const ChatInterface = () => {
         )}
         {weatherStatus === 'unavailable' && (
           <Typography variant="caption" color="textSecondary">
-            ⚠️ Weather context offline — answers may be general
+            ⚠️ Weather context offline. Answers may be general
           </Typography>
         )}
 
         {/* Spacer + clear all button */}
         <Box sx={{ flex: 1 }} />
         {messages.length > 0 && (
-          <Tooltip title="Clear all messages">
-            <IconButton
-              size="small"
-              onClick={() => setClearDialogOpen(true)}
-              sx={{ color: '#9e9e9e', '&:hover': { color: '#d32f2f' } }}
-            >
-              <DeleteSweepIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          <Button
+            size="small"
+            onClick={() => setClearDialogOpen(true)}
+            startIcon={<DeleteSweepIcon sx={{ fontSize: 15 }} />}
+            sx={{
+              color:          '#9e9e9e',
+              fontSize:       '0.7rem',
+              textTransform:  'none',
+              minHeight:      0,
+              py:             0.25,
+              px:             1,
+              borderRadius:   1,
+              '&:hover':      { color: '#d32f2f', bgcolor: '#ffebee' },
+            }}
+          >
+            Clear chat
+          </Button>
         )}
       </Box>
 
@@ -292,20 +308,48 @@ const ChatInterface = () => {
             onMouseLeave={() => setHoveredMessageIdx(null)}
             sx={{
               display:        'flex',
-              justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+              flexDirection:  msg.sender === 'user' ? 'row-reverse' : 'row',
+              alignItems:     'flex-start',
+              justifyContent: 'flex-start',
+              gap:            0.5,
               mb:             2,
-              position:       'relative',
             }}
           >
+            {/* Delete button: sits beside the bubble, visible on hover */}
+            <Box sx={{
+              width:          28,
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              pt:             1,
+              opacity:        hoveredMessageIdx === index ? 1 : 0,
+              transition:     'opacity 0.15s',
+              flexShrink:     0,
+            }}>
+              <Tooltip title="Delete message">
+                <IconButton
+                  size="small"
+                  onClick={() => handleDeleteMessage(index)}
+                  sx={{
+                    width:     26,
+                    height:    26,
+                    color:     '#bdbdbd',
+                    '&:hover': { color: '#d32f2f', bgcolor: '#ffebee' },
+                  }}
+                >
+                  <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
             <Paper
               sx={{
                 p:               2,
-                maxWidth:        '70%',
+                maxWidth:        '75%',
                 backgroundColor: msg.sender === 'user' ? '#dcf8c6' : 'white',
                 borderRadius:    2,
                 boxShadow:       1,
                 border:          msg.isError ? '1px solid #ff4444' : 'none',
-                position:        'relative',
               }}
             >
               <Typography variant="body1">{msg.text}</Typography>
@@ -323,29 +367,7 @@ const ChatInterface = () => {
                 </Typography>
               )}
 
-              {/* Per-message delete button — appears on hover */}
-              {hoveredMessageIdx === index && (
-                <Tooltip title="Delete message">
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteMessage(index)}
-                    sx={{
-                      position:        'absolute',
-                      top:             -12,
-                      right:           msg.sender === 'user' ? 'auto' : -12,
-                      left:            msg.sender === 'user' ? -12 : 'auto',
-                      bgcolor:         'white',
-                      border:          '1px solid #e0e0e0',
-                      boxShadow:       1,
-                      width:           24,
-                      height:          24,
-                      '&:hover':       { bgcolor: '#ffebee', borderColor: '#d32f2f' },
-                    }}
-                  >
-                    <DeleteOutlineIcon sx={{ fontSize: 14, color: '#9e9e9e' }} />
-                  </IconButton>
-                </Tooltip>
-              )}
+    
             </Paper>
           </Box>
         ))}

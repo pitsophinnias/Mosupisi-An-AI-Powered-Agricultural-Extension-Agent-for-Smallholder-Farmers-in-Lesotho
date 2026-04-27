@@ -118,7 +118,8 @@ app.post('/api/chat/ask', async (req, res) => {
       language:       language,
       weatherContext: weatherContext || null,
       context:        context || null,
-      farmer_id:      req.body.userId ? String(req.body.userId) : null,
+      farmer_id:      req.body.userId   ? String(req.body.userId)   : null,
+      farmer_name:    req.body.farmerName || null,
     };
 
     const response = await axios.post(PYTHON_AI_URL, payload, {
@@ -177,7 +178,8 @@ app.post('/api/chat', async (req, res) => {
       language:       language,
       weatherContext: null,
       context:        null,
-      farmer_id:      userId ? String(userId) : null,
+      farmer_id:      userId                   ? String(userId)                   : null,
+      farmer_name:    req.body.farmerName || null,
     };
 
     const response = await axios.post(PYTHON_AI_URL, payload, {
