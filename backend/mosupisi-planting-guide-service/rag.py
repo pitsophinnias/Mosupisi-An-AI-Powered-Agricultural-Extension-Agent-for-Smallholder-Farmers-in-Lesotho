@@ -19,6 +19,18 @@ _retriever   = None
 # ── LLM service URL ───────────────────────────────────────────────────────────
 LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://localhost:3004")
 
+def eager_load():
+    """Pre-load embeddings and retriever on service startup to eliminate cold start."""
+    import logging
+    log = logging.getLogger(__name__)
+    log.info("Planting guide: pre-loading embeddings and RAG retriever...")
+    _get_retriever()
+    if _retriever is not None:
+        log.info("Planting guide RAG retriever ready — service warm and ready")
+    else:
+        log.warning("Planting guide RAG retriever not available — will use LLM only")
+
+
 
 def _get_embeddings():
     global _embeddings
@@ -52,7 +64,7 @@ def _get_retriever():
             persist_directory="chroma_db",
             embedding_function=emb,
         )
-        _retriever = _vectorstore.as_retriever(search_kwargs={"k": 5})
+        _retriever = _vectorstore.as_retriever(search_kwargs={"k": 2})
         logger.info("Vector store ready")
     except Exception as e:
         logger.error(f"Failed to init vector store: {e}")
@@ -65,7 +77,7 @@ def _get_retriever():
 def generate_with_slm(prompt_text: str, max_tokens: int = 512, temperature: float = 0.4) -> str:
     """Send a prompt to the LLM service and return the generated text."""
     try:
-        with httpx.Client(timeout=60.0) as client:
+        with httpx.Client(timeout=110.0) as client:
             response = client.post(
                 f"{LLM_SERVICE_URL}/infer",
                 json={
@@ -212,35 +224,28 @@ def get_advice(
     weather_context, _ = get_context(f"Weather outlook for {location}")
 
     en_prompt = (
-        f"[INST] You are Mosupisi, an expert agricultural advisor for smallholder farmers in Lesotho.\n\n"
-        f"SPECIFIC PLANT DETAILS:\n"
-        f"- Crop: {crop}\n"
-        f"- Current growth stage: {current_stage}\n"
-        f"- Location: {location}\n"
-        f"- Field size: {area}\n"
-        f"- Days since planting: {days_since}\n\n"
-        f"Give advice ONLY for {crop} at the {current_stage} stage in {location}.\n"
-        f"Do NOT give generic farming advice. Every recommendation must be specific to {crop} at {current_stage}.\n\n"
-        f"Use ONLY the following context from Lesotho Meteorological Services bulletins:\n{context}\n\n"
-        f"Respond with exactly 4 numbered points. Each point must follow this format:\n"
-        f"1. **Point Title**: One or two specific sentences of advice.\n"
-        f"2. **Point Title**: One or two specific sentences of advice.\n"
-        f"3. **Point Title**: One or two specific sentences of advice.\n"
-        f"4. **Point Title**: One or two specific sentences of advice.\n\n"
-        f"Answer: [/INST]"
+        f"<s>[INST] You are Mosupisi, an agricultural advisor for smallholder farmers in Lesotho.\n\n"
+        f"Crop: {crop} | Stage: {current_stage} | Location: {location} | Days planted: {days_since}\n\n"
+        f"Write exactly 4 short paragraphs of advice specific to {crop} at {current_stage} stage.\n"
+        f"Each paragraph must start on a new line with a number and bold title like this:\n"
+        f"1. **Title**: sentence here.\n"
+        f"2. **Title**: sentence here.\n"
+        f"3. **Title**: sentence here.\n"
+        f"4. **Title**: sentence here.\n\n"
+        f"Context from Lesotho bulletins:\n{context}\n\n"
+        f"Answer (4 numbered paragraphs, each on its own line): [/INST]"
     )
 
     advice_en = generate_with_slm(en_prompt)
 
     weather_en_prompt = (
-        f"[INST] Summarize the weather outlook for {location} in English.\n"
-        f"Focus specifically on how conditions affect {crop} at the {current_stage} stage.\n\n"
+        f"<s>[INST] Summarize weather for {location} and its effect on {crop} at {current_stage} stage.\n"
+        f"Write exactly 3 lines, each starting on its own line:\n"
+        f"1. **Current Conditions**: one sentence.\n"
+        f"2. **Rainfall Outlook**: one sentence.\n"
+        f"3. **Impact on {crop}**: one sentence.\n\n"
         f"Context:\n{weather_context}\n\n"
-        f"Respond with 3 numbered points:\n"
-        f"1. **Current Conditions**: ...\n"
-        f"2. **Rainfall Outlook**: ...\n"
-        f"3. **Impact on {crop}**: ...\n\n"
-        f"Summary: [/INST]"
+        f"Answer (3 numbered lines): [/INST]"
     )
 
     weather_en = generate_with_slm(weather_en_prompt)
