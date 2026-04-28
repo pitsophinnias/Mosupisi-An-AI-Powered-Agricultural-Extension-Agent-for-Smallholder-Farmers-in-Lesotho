@@ -26,7 +26,7 @@ LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://localhost:3004")
 def _call_llm(prompt: str) -> str | None:
     """Call mosupisi-llm-service. Returns None if unavailable."""
     try:
-        with httpx.Client(timeout=60.0) as client:
+        with httpx.Client(timeout=50.0) as client:  # 50s — leaves room for fallback within test budget
             response = client.post(
                 f"{LLM_SERVICE_URL}/infer",
                 json={

@@ -45,7 +45,7 @@ const DISTRICT_COORDS = {
   'semonkong':     { lat: -29.85, lon: 28.05, name: 'Semonkong' },
   'oxbow':         { lat: -28.73, lon: 28.62, name: 'Oxbow' },
   'qholaqhoe':     { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
-  'lipelaneng':    { lat: -28.87, lon: 28.09, name: 'Butha-Buthe' },
+  'lipelaneng':    { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
 };
 
 function resolveCoords(locationStr) {

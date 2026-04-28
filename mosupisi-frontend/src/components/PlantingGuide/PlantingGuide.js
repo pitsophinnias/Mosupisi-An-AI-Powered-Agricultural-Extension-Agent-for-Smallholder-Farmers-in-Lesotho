@@ -121,7 +121,7 @@ const PlantingGuide = () => {
   // Lesotho town coordinates for per-plant weather lookup
   const LESOTHO_COORDS = {
     // Butha-Buthe district
-    'lipelaneng':    { lat: -28.87, lon: 28.09, name: 'Butha-Buthe' },
+    'lipelaneng':    { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
     'butha-buthe':   { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
     'butha buthe':   { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
     // Leribe district
@@ -131,7 +131,7 @@ const PlantingGuide = () => {
     'thabana-morena':{ lat: -29.15, lon: 27.74, name: 'Berea' },
     // Maseru district
     'maseru':        { lat: -29.32, lon: 27.50, name: 'Maseru' },
-    'roma':          { lat: -29.45, lon: 27.80, name: 'Maseru' },
+    'roma':          { lat: -29.46, lon: 27.56, name: 'Moshoeshoe I' },
     'moshoeshoe':    { lat: -29.46, lon: 27.56, name: 'Moshoeshoe I' },
     'qholaqhoe':     { lat: -28.76, lon: 28.27, name: 'Butha-Buthe' },
     // Mafeteng district

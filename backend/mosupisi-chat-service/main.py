@@ -225,9 +225,17 @@ def _build_prompt(message, context_text, system_note, language, crop_ctx, farmer
 
     # Reinforce language at the end of the instruction block
     if language == "st":
-        parts.append("\nAraba ka Sesotho feela. Thibela ho sebelisa lipuo tse ling.")
+        parts.append(
+            "\nO LOKELA ho araba ka Sesotho feela. "
+            "Ha o arabe ka Senyesemane kapa puo e ngoe le e ngoe. "
+            "Sesotho feela. Ho ea pele le ho qetela, araba ka Sesotho."
+        )
     else:
-        parts.append("\nRespond in English only. Do not use Chinese, French, or any other language.")
+        parts.append(
+            "\nYou MUST respond in English only. "
+            "Do NOT use Chinese, Arabic, French, or any other language. "
+            "English only."
+        )
 
     system_block = "\n".join(parts)
 
@@ -269,12 +277,17 @@ def _clean_response(text: str, message: str) -> str:
 def _is_wrong_language(text: str, expected_language: str) -> bool:
     """
     Detect if the model responded in the wrong language.
-    Chinese, Arabic, Japanese, Korean etc. are clearly wrong for en/st responses.
+    Checks for: Arabic (U+0600-U+06FF), CJK/Japanese/Korean/other (U+2E80+)
     """
     if not text:
         return False
-    # Count CJK and other non-Latin script characters
-    non_latin = sum(1 for c in text if ord(c) > 0x2E7F)
+    non_latin = sum(
+        1 for c in text
+        if ord(c) > 0x2E7F                          # CJK, Japanese, Korean, etc.
+        or (0x0600 <= ord(c) <= 0x06FF)             # Arabic
+        or (0x0590 <= ord(c) <= 0x05FF)             # Hebrew
+        or (0x0900 <= ord(c) <= 0x097F)             # Devanagari
+    )
     # If more than 10% of chars are non-Latin, it's the wrong language
     return non_latin > len(text) * 0.1
 
