@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Container, Grid, Paper, Typography, Box, Card, CardContent,
   CardActionArea, Button, Chip, Alert, useTheme, IconButton,
-  Tooltip, Skeleton, Divider,
+  Tooltip, Skeleton,
 } from '@mui/material';
 import {
   WbSunny as WeatherIcon,
@@ -24,10 +24,7 @@ import { db } from '../../db/db';
 import { format, parseISO, isValid } from 'date-fns';
 import { getCurrentWeather, getWeatherForecast, descriptionToCondition } from '../../services/weatherService';
 
-// ── Chat service URL ─────────────────────────────────────────────────────────
-const CHAT_URL = process.env.REACT_APP_CHAT_SERVICE_URL || 'http://localhost:3002';
-
-// ── Offline fallback rules ────────────────────────────────────────────────────
+// ── Rule‑based advice using current weather values ───────────────────────────
 function getOfflineAdvice(weather, crops, language) {
   const temp   = weather?.temperature_c ?? weather?.temp?.max ?? null;
   const rain   = weather?.humidity_pct  ?? weather?.rainChance ?? null;
@@ -78,53 +75,6 @@ function getOfflineAdvice(weather, crops, language) {
   return { cropAdvice, pestAdvice };
 }
 
-// ── Build the prompt sent to the chat service ─────────────────────────────────
-function buildAdvicePrompt(weather, crops, region, language) {
-  const temp  = weather?.temperature_c  ?? weather?.temp?.max  ?? 'unknown';
-  const rain  = weather?.humidity_pct   ?? weather?.rainChance ?? 'unknown';
-  const wind  = weather?.wind_speed_ms  ?? 'unknown';
-  const desc  = weather?.description    ?? weather?.condition  ?? 'unknown';
-  const cropList = (crops || []).join(', ') || 'maize, sorghum';
-  const isEn  = language === 'en';
-
-  return isEn
-    ? `You are Mosupisi, an agricultural extension agent for smallholder farmers in Lesotho.
-Current conditions for ${region || 'Maseru'}: temperature ${temp}°C, humidity/rain chance ${rain}%, wind ${wind} m/s, conditions: ${desc}.
-The farmer grows: ${cropList}.
-Give TWO short urgent pieces of advice (1-2 sentences each):
-1. CROP ADVICE: What should this farmer do RIGHT NOW for their crops given these weather conditions?
-2. PEST ADVICE: What pest or disease risk is HIGH right now and what should they watch for?
-Reply in this exact format:
-CROP: [advice here]
-PEST: [advice here]
-Be specific, practical, and urgent. No greetings.`
-    : `O Mosupisi, moemeli oa temo bakeng sa balemi ba Lesotho.
-Maemo a joale bakeng sa ${region || 'Maseru'}: mocheso ${temp}°C, mongobo/monyetla oa pula ${rain}%, moea ${wind} m/s, maemo: ${desc}.
-Molemisi o jala: ${cropList}.
-Fana ka LIQHEKU TSE PELI tse khutšoane tse potlakileng (metsotso e 1-2 mong le mong):
-1. KELETSO EA LIJALO: Molemisi o lokela ho etsa JOALE'NG bakeng sa lijalo tsa hae ka maemo ana a leholimo?
-2. KELETSO EA LIKOKONYANA: Ke kokoana-hloko efe kapa lefu lefe le kotsing e phahameng joale ebile ba lokela ho sheba eng?
-Araba ka foromo ena e nepahetseng:
-LIJALO: [keletso mona]
-LIKOKONYANA: [keletso mona]
-Be specific and practical. Ha ho dumediso.`;
-}
-
-// ── Parse the chat service response ──────────────────────────────────────────
-function parseAdviceResponse(text, language) {
-  const isEn = language === 'en';
-  const cropKey  = isEn ? 'CROP:'  : 'LIJALO:';
-  const pestKey  = isEn ? 'PEST:'  : 'LIKOKONYANA:';
-
-  const cropMatch = text.match(new RegExp(`${cropKey}\\s*(.+?)(?=${pestKey}|$)`, 'is'));
-  const pestMatch = text.match(new RegExp(`${pestKey}\\s*(.+?)$`, 'is'));
-
-  return {
-    cropAdvice: cropMatch?.[1]?.trim() || null,
-    pestAdvice: pestMatch?.[1]?.trim() || null,
-  };
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 const Dashboard = () => {
   const { user }        = useAuth();
@@ -138,72 +88,47 @@ const Dashboard = () => {
   const [alerts, setAlerts]                 = useState([]);
   const [loading, setLoading]               = useState(true);
   const [cropGuides, setCropGuides]         = useState([]);
+  const [currentLocation, setCurrentLocation] = useState('');
 
-  // AI advice state
+  // Rule‑based advice state
   const [cropAdvice, setCropAdvice]         = useState('');
   const [pestAdvice, setPestAdvice]         = useState('');
   const [adviceLoading, setAdviceLoading]   = useState(false);
-  const [adviceIsAI, setAdviceIsAI]         = useState(false);
 
   const adviceFetched = useRef(false);
+
+  // Update advice from current weather (no AI)
+  const updateAdviceFromWeather = (wxData) => {
+    setAdviceLoading(true);
+    const { cropAdvice, pestAdvice } = getOfflineAdvice(wxData, user?.crops, language);
+    setCropAdvice(cropAdvice);
+    setPestAdvice(pestAdvice);
+    setAdviceLoading(false);
+  };
 
   useEffect(() => {
     loadDashboardData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Fetch AI advice whenever weather is ready ───────────────────────────────
+  // When weather becomes available, update advice and location
   useEffect(() => {
     if (weather && !adviceFetched.current) {
       adviceFetched.current = true;
-      fetchAdvice(weather);
-    }
-  }, [weather]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchAdvice = async (wxData) => {
-    setAdviceLoading(true);
-
-    // First show offline fallback immediately
-    const fallback = getOfflineAdvice(wxData, user?.crops, language);
-    setCropAdvice(fallback.cropAdvice);
-    setPestAdvice(fallback.pestAdvice);
-    setAdviceIsAI(false);
-
-    // Then try AI
-    try {
-      const prompt = buildAdvicePrompt(wxData, user?.crops, user?.region, language);
-      const res = await fetch(`${CHAT_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: prompt,
-          conversationId: `dashboard-advice-${Date.now()}`,
-          userId: user?.id || 'anonymous',
-        }),
-        signal: AbortSignal.timeout(12000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.response || data?.message || data?.content || '';
-        if (text) {
-          const parsed = parseAdviceResponse(text, language);
-          if (parsed.cropAdvice) setCropAdvice(parsed.cropAdvice);
-          if (parsed.pestAdvice) setPestAdvice(parsed.pestAdvice);
-          setAdviceIsAI(true);
-        }
+      updateAdviceFromWeather(weather);
+      // Set current location name from weather data (e.g., "Maseru", "Butha-Buthe")
+      if (weather?.location_name) {
+        setCurrentLocation(weather.location_name);
       }
-    } catch {
-      // Fallback already set above — silently keep it
-    } finally {
-      setAdviceLoading(false);
     }
-  };
+  }, [weather]);
 
   const loadDashboardData = async () => {
     adviceFetched.current = false;
     setLoading(true);
     setCropAdvice('');
     setPestAdvice('');
+    setCurrentLocation('');
+
     try {
       try {
         const { data, isStale } = await getCurrentWeather();
@@ -221,7 +146,11 @@ const Dashboard = () => {
         }
       } catch {
         const cached = await db.weather.orderBy('date').first();
-        if (cached) { setWeather(cached); setWeatherStale(true); }
+        if (cached) {
+          setWeather(cached);
+          setWeatherStale(true);
+          if (cached.location_name) setCurrentLocation(cached.location_name);
+        }
         const weatherAlerts = await db.weather
           .filter(w => w.alert && new Date(w.date) >= new Date())
           .toArray();
@@ -301,6 +230,9 @@ const Dashboard = () => {
     );
   }
 
+  // Determine display location: use current location from weather, fallback to user's registered region
+  const displayRegion = currentLocation || user?.region || 'Maseru';
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
 
@@ -353,7 +285,7 @@ const Dashboard = () => {
               {t('welcome')}, {user?.name?.split(' ')[0] || 'Ntate'}! 
             </Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mt: 0.5 }}>
-              {language === 'en' ? 'Region' : 'Setereke'}: {user?.region || 'Maseru'}
+              {language === 'en' ? 'Current Location' : 'Sebaka sa Hona Joale'}: {displayRegion}
               {user?.crops?.length > 0 && (
                 <> &nbsp;·&nbsp; {user.crops.map(c => t(c)).join(', ')}</>
               )}
@@ -362,18 +294,6 @@ const Dashboard = () => {
 
           {/* Status badges */}
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
-            {adviceIsAI && (
-              <Chip
-                label={language === 'en' ? '✦ AI Advice' : '✦ Keletso ea AI'}
-                size="small"
-                sx={{
-                  bgcolor: 'rgba(76,175,80,0.3)',
-                  color: '#a5d6a7',
-                  fontSize: '0.7rem', height: 22,
-                  border: '1px solid rgba(76,175,80,0.4)',
-                }}
-              />
-            )}
             {weatherIsStale && (
               <Chip
                 icon={<OfflineIcon sx={{ fontSize: '12px !important', color: '#ffe082 !important' }} />}
@@ -401,8 +321,6 @@ const Dashboard = () => {
 
         {/* Advice panels */}
         <Grid container spacing={1.5}>
-
-          {/* Crop advice */}
           <Grid item xs={12} sm={6}>
             <Box sx={{
               bgcolor: 'rgba(0,0,0,0.25)',
@@ -428,13 +346,12 @@ const Dashboard = () => {
                 </>
               ) : (
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.88)', lineHeight: 1.55 }}>
-                  {cropAdvice || (language === 'en' ? 'Fetching crop advice...' : 'E fumana keletso ea lijalo...')}
+                  {cropAdvice || (language === 'en' ? 'Loading crop advice...' : 'E fumana keletso ea lijalo...')}
                 </Typography>
               )}
             </Box>
           </Grid>
 
-          {/* Pest advice */}
           <Grid item xs={12} sm={6}>
             <Box sx={{
               bgcolor: 'rgba(0,0,0,0.25)',
@@ -460,7 +377,7 @@ const Dashboard = () => {
                 </>
               ) : (
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.88)', lineHeight: 1.55 }}>
-                  {pestAdvice || (language === 'en' ? 'Fetching pest advice...' : 'E fumana keletso ea likokonyana...')}
+                  {pestAdvice || (language === 'en' ? 'Loading pest advice...' : 'E fumana keletso ea likokonyana...')}
                 </Typography>
               )}
             </Box>
@@ -471,7 +388,12 @@ const Dashboard = () => {
         <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             size="small"
-            onClick={() => { adviceFetched.current = false; if (weather) fetchAdvice(weather); }}
+            onClick={() => {
+              if (weather) {
+                adviceFetched.current = true;
+                updateAdviceFromWeather(weather);
+              }
+            }}
             disabled={adviceLoading}
             sx={{
               color: 'rgba(165,214,167,0.7)',

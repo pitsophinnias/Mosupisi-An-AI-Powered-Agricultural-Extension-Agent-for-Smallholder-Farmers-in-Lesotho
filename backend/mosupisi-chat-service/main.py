@@ -195,62 +195,50 @@ BASE_PERSONA_ST = (
 
 
 def _build_prompt(message, context_text, system_note, language, crop_ctx, farmer_name=None):
-    persona = BASE_PERSONA_ST if language == "st" else BASE_PERSONA_EN
-    parts = [persona]
-
-    # Address the farmer by name if available
-    name = farmer_name.strip() if farmer_name and farmer_name.strip() else None
-    if name:
-        if language == "st":
-            parts.append(f"\nLebitso la molemi: {name}. Araba ka lebitso la hae.")
-        else:
-            parts.append(f"\nThe farmer's name is {name}. Address them by name in your response.")
-
-    if crop_ctx:
-        crop  = crop_ctx.get("crop", "")
-        stage = crop_ctx.get("stage", "")
-        loc   = crop_ctx.get("location", "")
-        if crop:
-            parts.append(
-                f"\nFarmer context: growing {crop}"
-                + (f" at {stage} stage" if stage else "")
-                + (f" in {loc}" if loc else "") + "."
-            )
-
-    if system_note:
-        parts.append(
-            "\n" + system_note +
-            "\nUse the weather context above when it is relevant to the question."
-        )
-
-    # Reinforce language at the end of the instruction block
+    """
+    Simplified prompt format that works with most Lesotho‑finetuned GGUF models.
+    - No system message inside [INST]
+    - Context and instructions are added as plain text before the [INST] block
+    - Only the user's actual message goes inside [INST] ... [/INST]
+    """
+    prefix = ""
+    
+    # Add the assistant's persona once at the very top (plain text)
     if language == "st":
-        parts.append(
-            "\nO LOKELA ho araba ka Sesotho feela. "
-            "Ha o arabe ka Senyesemane kapa puo e ngoe le e ngoe. "
-            "Sesotho feela. Ho ea pele le ho qetela, araba ka Sesotho."
-        )
+        prefix += "Ke Mosupisi, moeletsi oa temo bakeng sa balimi ba Lesotho. Fana ka keletso e tobileng.\n\n"
     else:
-        parts.append(
-            "\nYou MUST respond in English only. "
-            "Do NOT use Chinese, Arabic, French, or any other language. "
-            "English only."
-        )
-
-    system_block = "\n".join(parts)
-
-    rag_block = (
-        f"\nRelevant information from Lesotho agricultural bulletins:\n{context_text}\n"
-        if context_text else ""
-    )
-
-    farmer_label = name if name else "Farmer"
-    return (
-        f"[INST] {system_block}"
-        f"{rag_block}"
-        f"\n{farmer_label}'s question: {message}\nAnswer: [/INST]"
-    )
-
+        prefix += "You are Mosupisi, an agricultural assistant for farmers in Lesotho. Give practical, specific advice.\n\n"
+    
+    # Add farmer name if available
+    if farmer_name:
+        prefix += f"Farmer's name: {farmer_name}\n"
+    
+    # Add crop context
+    if crop_ctx and crop_ctx.get("crop"):
+        crop = crop_ctx["crop"]
+        stage = crop_ctx.get("stage", "")
+        loc = crop_ctx.get("location", "")
+        prefix += f"Crop: {crop}"
+        if stage:
+            prefix += f" at {stage} stage"
+        if loc:
+            prefix += f" in {loc}"
+        prefix += "\n"
+    
+    # Add retrieved bulletin context
+    if context_text:
+        prefix += f"\nRelevant from Lesotho bulletins:\n{context_text}\n"
+    
+    # Add weather context
+    if system_note:
+        prefix += f"\nWeather info:\n{system_note}\n"
+    
+    # Build the user message
+    user_message = message
+    
+    # Combine: plain context + [INST] user message [/INST]
+    prompt = f"{prefix}<s>[INST] {user_message} [/INST]"
+    return prompt
 # ---------------------------------------------------------------------------
 # Inference
 # ---------------------------------------------------------------------------

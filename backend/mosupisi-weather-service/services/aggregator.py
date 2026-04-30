@@ -26,6 +26,7 @@ from models.schemas import (
 )
 from services.nasa_power import NASAPowerClient
 from services.lms import LMSClient
+from services.openweathermap import OpenWeatherMapClient
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class WeatherAggregator:
         self.db   = db
         self.nasa = NASAPowerClient()
         self.lms  = LMSClient()
+        self.owm  = OpenWeatherMapClient()
 
     async def get_current(self, req: WeatherRequest) -> CurrentWeather:
         """Current conditions from CSIS, NASA POWER fallback."""
@@ -62,7 +64,18 @@ class WeatherAggregator:
         except Exception as e:
             logger.warning(f"CSIS get_current failed: {e} — falling back to NASA POWER")
 
-        # 2. Fall back to NASA POWER (derives current from recent reanalysis)
+        # 2. Try OpenWeatherMap (real-time, requires API key in .env)
+        if result is None and self.owm.is_active():
+            try:
+                result = await self.owm.get_current(
+                    req.latitude, req.longitude, req.location_name
+                )
+                if result:
+                    logger.info(f"Current weather from OpenWeatherMap for {result.location_name}")
+            except Exception as e:
+                logger.warning(f"OWM get_current failed: {e} — falling back to NASA POWER")
+
+        # 3. Last resort: NASA POWER (derives current from reanalysis — not real-time)
         if result is None:
             try:
                 nasa = await self.nasa.get_forecast(
@@ -82,7 +95,7 @@ class WeatherAggregator:
                         description   = day.description or "Data from NASA POWER",
                         source        = WeatherSource.NASA_POWER,
                     )
-                    logger.info("Current weather from NASA POWER (CSIS unavailable)")
+                    logger.info("Current weather from NASA POWER (CSIS and OWM unavailable)")
             except Exception as e:
                 logger.error(f"NASA POWER fallback also failed: {e}")
 
@@ -120,14 +133,25 @@ class WeatherAggregator:
         except Exception as e:
             logger.warning(f"CSIS get_forecast failed: {e} — falling back to NASA POWER")
 
-        # 2. Fall back to NASA POWER
+        # 2. Try OpenWeatherMap (real-time 5-day forecast, requires API key)
+        if forecast is None and self.owm.is_active():
+            try:
+                forecast = await self.owm.get_forecast(
+                    req.latitude, req.longitude, req.days, req.location_name
+                )
+                if forecast:
+                    logger.info(f"Forecast from OpenWeatherMap: {len(forecast.days)} days")
+            except Exception as e:
+                logger.warning(f"OWM forecast failed: {e} — falling back to NASA POWER")
+
+        # 3. Last resort: NASA POWER
         if forecast is None:
             try:
                 forecast = await self.nasa.get_forecast(
                     req.latitude, req.longitude, req.days, req.location_name
                 )
                 logger.info(
-                    f"Forecast from NASA POWER (CSIS unavailable): {len(forecast.days)} days"
+                    f"Forecast from NASA POWER (CSIS and OWM unavailable): {len(forecast.days)} days"
                 )
             except Exception as e:
                 logger.error(f"NASA POWER forecast also failed: {e}")

@@ -567,12 +567,12 @@ const PestControl = () => {
       })
       .catch(err => console.warn('PestControl: forecast fetch failed', err));
 
-    // Weather alerts — fetch from notification service using the same URL pattern
-    // as NotificationContext.apiFetch: /path?farmer_id=N (no extra query params
-    // that the service might not support, filter client-side instead)
+    // Weather alerts — fetch from notification service.
+    // Filter to last 6 hours only so NASA POWER fallback alerts
+    // from earlier sessions don't persist on screen.
     if (user?.id) {
       const NOTIF_URL = process.env.REACT_APP_NOTIFICATION_SERVICE_URL || 'http://localhost:8004';
-      const todayStr  = new Date().toISOString().split('T')[0];
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
       fetch(`${NOTIF_URL}/notifications/?farmer_id=${user.id}`)
         .then(r => r.ok ? r.json() : [])
         .then(data => {
@@ -580,11 +580,18 @@ const PestControl = () => {
           const recent = list.filter(n =>
             n.type === 'weather' &&
             ['warning', 'critical'].includes(n.severity) &&
-            n.created_at?.startsWith(todayStr)
+            new Date(n.created_at) >= sixHoursAgo
           );
-          setWeatherAlerts(recent);
+          // Deduplicate by title — keep only the most recent of each alert type
+          const seen = new Set();
+          const deduped = recent.filter(n => {
+            if (seen.has(n.title)) return false;
+            seen.add(n.title);
+            return true;
+          });
+          setWeatherAlerts(deduped);
         })
-        .catch(() => {}); // non-fatal — alerts are a nice-to-have
+        .catch(() => {}); // non-fatal
     }
   }, [user]);
 

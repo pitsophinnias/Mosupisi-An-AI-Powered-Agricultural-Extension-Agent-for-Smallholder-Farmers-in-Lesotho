@@ -34,7 +34,9 @@ export const NotificationProvider = ({ children }) => {
         { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } }
       );
       if (!res.ok) return null;
-      return res.json();
+      // DELETE responses may return JSON or empty
+      const text = await res.text();
+      return text ? JSON.parse(text) : {};
     } catch {
       return null;
     }
@@ -78,6 +80,41 @@ export const NotificationProvider = ({ children }) => {
     setUnreadCount(0);
   }, [apiFetch]);
 
+  // ── Delete a single notification ───────────────────────────────────────────
+
+  const deleteNotification = useCallback(async (notificationId) => {
+    const result = await apiFetch(`/notifications/${notificationId}`, { method: 'DELETE' });
+    if (result !== null) {
+      setNotifications(prev => {
+        const target = prev.find(n => n.id === notificationId);
+        const wasUnread = target && !target.is_read;
+        if (wasUnread) setUnreadCount(c => Math.max(0, c - 1));
+        return prev.filter(n => n.id !== notificationId);
+      });
+    }
+  }, [apiFetch]);
+
+  // ── Delete all notifications (optionally filtered by type) ─────────────────
+
+  const deleteAllNotifications = useCallback(async (type = undefined) => {
+    const path = type
+      ? `/notifications/clear-all?type=${encodeURIComponent(type)}`
+      : '/notifications/clear-all';
+    const result = await apiFetch(path, { method: 'DELETE' });
+    if (result !== null) {
+      if (type) {
+        setNotifications(prev => {
+          const removed = prev.filter(n => n.type === type && !n.is_read).length;
+          setUnreadCount(c => Math.max(0, c - removed));
+          return prev.filter(n => n.type !== type);
+        });
+      } else {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
+    }
+  }, [apiFetch]);
+
   // ── Settings ───────────────────────────────────────────────────────────────
 
   const getSettings = useCallback(() => apiFetch('/notifications/settings'), [apiFetch]);
@@ -100,19 +137,16 @@ export const NotificationProvider = ({ children }) => {
   const subscribeToPush = useCallback(async () => {
     if (!pushSupported || !farmerId) return false;
     try {
-      // Get VAPID public key from service
       const keyData = await apiFetch('/push/vapid-public-key');
       if (!keyData?.public_key) {
         console.warn('[Push] No VAPID key available — stub mode');
         return false;
       }
-
       const reg = await navigator.serviceWorker.ready;
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(keyData.public_key),
       });
-
       const sub = subscription.toJSON();
       await apiFetch('/push/subscribe', {
         method: 'POST',
@@ -122,7 +156,6 @@ export const NotificationProvider = ({ children }) => {
           auth: sub.keys.auth,
         }),
       });
-
       setPushSubscribed(true);
       return true;
     } catch (err) {
@@ -180,7 +213,6 @@ export const NotificationProvider = ({ children }) => {
 
     pollRef.current = setInterval(fetchUnreadCount, POLL_INTERVAL_MS);
 
-    // Re-poll on window focus
     const onFocus = () => fetchUnreadCount();
     window.addEventListener('focus', onFocus);
 
@@ -200,6 +232,8 @@ export const NotificationProvider = ({ children }) => {
     fetchUnreadCount,
     markRead,
     markAllRead,
+    deleteNotification,
+    deleteAllNotifications,
     getSettings,
     updateSettings,
     subscribeToPush,
@@ -213,8 +247,6 @@ export const NotificationProvider = ({ children }) => {
     </NotificationContext.Provider>
   );
 };
-
-// ── Utility ────────────────────────────────────────────────────────────────
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
