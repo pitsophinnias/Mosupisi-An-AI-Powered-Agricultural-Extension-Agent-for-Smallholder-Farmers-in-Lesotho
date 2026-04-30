@@ -17,6 +17,8 @@ import {
   Error as CriticalIcon,
   Settings as SettingsIcon,
   Close as CloseIcon,
+  DeleteOutline as DeleteIcon,
+  ClearAll as ClearAllIcon,
 } from '@mui/icons-material';
 import { useNotifications } from '../../context/NotificationContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -33,6 +35,7 @@ const NotificationsPage = () => {
     getSettings, updateSettings,
     pushSupported, pushSubscribed,
     subscribeToPush, unsubscribeFromPush,
+    deleteNotification, deleteAllNotifications,
   } = useNotifications();
 
   const [settings, setSettings]     = useState(null);
@@ -123,6 +126,18 @@ const NotificationsPage = () => {
               {isEn ? 'Mark all read' : 'Bala tsohle'}
             </Button>
           )}
+          {filtered.length > 0 && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              startIcon={<ClearAllIcon sx={{ fontSize: 16 }} />}
+              onClick={() => deleteAllNotifications(filter || undefined)}
+              sx={{ fontSize: '0.75rem' }}
+            >
+              {isEn ? 'Clear all' : 'Hlakola tsohle'}
+            </Button>
+          )}
           <IconButton
             onClick={() => setSettingsOpen(true)}
             title={isEn ? 'Notification settings' : 'Litaelo tsa litemoso'}
@@ -204,6 +219,17 @@ const NotificationsPage = () => {
                             bgcolor: 'error.main', flexShrink: 0,
                           }} />
                         )}
+                        <IconButton
+                          size="small"
+                          onClick={(e) => { e.stopPropagation(); deleteNotification(notif.id); }}
+                          title={isEn ? 'Delete' : 'Hlakola'}
+                          sx={{
+                            ml: 'auto', p: 0.25, opacity: 0.35,
+                            '&:hover': { opacity: 1, color: 'error.main' },
+                          }}
+                        >
+                          <DeleteIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
                       </Box>
                     }
                     secondary={

@@ -3,10 +3,11 @@
 
 from __future__ import annotations
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 import crud
 import schemas
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/api", tags=["plantings"])
 # ---------------------------------------------------------------------------
 @router.get("/plantings", response_model=List[schemas.PlantingOut])
 def list_plantings(db: Session = Depends(get_db)):
+    """Return all plantings for the current user."""
     return crud.get_all_plantings(db)
 
 
@@ -30,12 +32,12 @@ def list_plantings(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 @router.post("/plantings", response_model=schemas.PlantingOut, status_code=201)
 def create_planting(payload: schemas.PlantingCreate, db: Session = Depends(get_db)):
+    """Create a new planting record."""
     return crud.create_planting(db, payload)
 
 
 # ---------------------------------------------------------------------------
 # 3. POST /plantings/{id}/action
-#    Logs the activity AND generates advice based on what was done.
 # ---------------------------------------------------------------------------
 @router.post("/plantings/{planting_id}/action", response_model=schemas.PlantingOut)
 def log_action(
@@ -43,39 +45,36 @@ def log_action(
     payload: schemas.ActionRequest,
     db: Session = Depends(get_db),
 ):
+    """Log an action (e.g., watered, fertilised) and generate AI advice."""
     planting = crud.get_planting(db, planting_id)
     if planting is None:
         raise HTTPException(status_code=404, detail=f"Planting {planting_id} not found")
 
-    # Generate action-specific advice
     advice_en, advice_st = _generate_action_advice(
-        action   = payload.action,
-        crop     = planting.crop,
-        stage    = planting.currentStage,
-        location = planting.location or "Lesotho",
-        language = payload.language,
+        action=payload.action,
+        crop=planting.crop,
+        stage=planting.currentStage,
+        location=planting.location or "Lesotho",
+        language=payload.language,
     )
 
     updated = crud.log_action(
-        db          = db,
-        planting_id = planting_id,
-        action      = payload.action,
-        advice_en   = advice_en,
-        advice_st   = advice_st,
-        language    = payload.language,
+        db=db,
+        planting_id=planting_id,
+        action=payload.action,
+        advice_en=advice_en,
+        advice_st=advice_st,
+        language=payload.language,
     )
     return updated
 
 
 # ---------------------------------------------------------------------------
 # 4. GET /plantings/{id}/actions
-#    Returns the full action log history for a planting.
 # ---------------------------------------------------------------------------
 @router.get("/plantings/{planting_id}/actions", response_model=List[schemas.ActionLogOut])
-def get_action_history(
-    planting_id: int,
-    db: Session = Depends(get_db),
-):
+def get_action_history(planting_id: int, db: Session = Depends(get_db)):
+    """Return full action log history for a planting."""
     planting = crud.get_planting(db, planting_id)
     if planting is None:
         raise HTTPException(status_code=404, detail=f"Planting {planting_id} not found")
@@ -83,7 +82,7 @@ def get_action_history(
 
 
 # ---------------------------------------------------------------------------
-# 5. POST /plantings/{id}/advice  (full RAG advice)
+# 5. POST /plantings/{id}/advice (full RAG advice)
 # ---------------------------------------------------------------------------
 @router.post("/plantings/{planting_id}/advice", response_model=schemas.AdviceResponse)
 def get_planting_advice(
@@ -91,19 +90,20 @@ def get_planting_advice(
     payload: schemas.AdviceRequest,
     db: Session = Depends(get_db),
 ):
+    """Generate full AI advice for a planting, including weather and RAG context."""
     planting = crud.get_planting(db, planting_id)
     if planting is None:
         raise HTTPException(status_code=404, detail=f"Planting {planting_id} not found")
 
     result = get_advice(
-        crop          = planting.crop,
-        planting_date = planting.plantingDate,
-        area          = planting.area or "unknown area",
-        location      = planting.location or "Lesotho",
-        current_stage = planting.currentStage,
-        days_since    = planting.daysSincePlanting,
-        language      = payload.language,
-        extra_context = payload.userContext,
+        crop=planting.crop,
+        planting_date=planting.plantingDate,
+        area=planting.area or "unknown area",
+        location=planting.location or "Lesotho",
+        current_stage=planting.currentStage,
+        days_since=planting.daysSincePlanting,
+        language=payload.language,
+        extra_context=payload.userContext,
     )
     return schemas.AdviceResponse(**result)
 
@@ -113,10 +113,11 @@ def get_planting_advice(
 # ---------------------------------------------------------------------------
 @router.get("/crop-rotation", response_model=schemas.CropRotationResponse)
 def crop_rotation():
+    """Return crop rotation recommendations."""
     return schemas.CropRotationResponse(
-        maize   = schemas.RotationEntry(**CROP_ROTATION["maize"]),
-        sorghum = schemas.RotationEntry(**CROP_ROTATION["sorghum"]),
-        legumes = schemas.RotationEntry(**CROP_ROTATION["legumes"]),
+        maize=schemas.RotationEntry(**CROP_ROTATION["maize"]),
+        sorghum=schemas.RotationEntry(**CROP_ROTATION["sorghum"]),
+        legumes=schemas.RotationEntry(**CROP_ROTATION["legumes"]),
     )
 
 
@@ -125,14 +126,16 @@ def crop_rotation():
 # ---------------------------------------------------------------------------
 @router.get("/weather-context", response_model=schemas.WeatherContextResponse)
 def weather_context():
+    """Return a summary of current weather context from LMS bulletins."""
     return schemas.WeatherContextResponse(**get_weather_context())
 
 
 # ---------------------------------------------------------------------------
-# 8. POST /sync
+# 8. POST /sync (bulk sync from frontend)
 # ---------------------------------------------------------------------------
 @router.post("/sync", response_model=schemas.SyncResponse)
 def sync_plantings(payload: schemas.SyncRequest, db: Session = Depends(get_db)):
+    """Sync plantings from frontend (used for offline delta sync)."""
     synced = 0
     for item in payload.plantings:
         crud.upsert_planting_from_sync(db, dict(item))
@@ -141,17 +144,15 @@ def sync_plantings(payload: schemas.SyncRequest, db: Session = Depends(get_db)):
     since_dt = datetime.utcnow()
     if payload.lastSyncTimestamp:
         try:
-            since_dt = datetime.fromisoformat(
-                payload.lastSyncTimestamp.replace("Z", "+00:00")
-            ).replace(tzinfo=None)
+            since_dt = datetime.fromisoformat(payload.lastSyncTimestamp.replace("Z", "+00:00")).replace(tzinfo=None)
         except ValueError:
             pass
 
     delta = crud.get_plantings_since(db, since_dt)
     return schemas.SyncResponse(
-        synced    = synced,
-        delta     = delta,
-        timestamp = datetime.utcnow().isoformat() + "Z",
+        synced=synced,
+        delta=delta,
+        timestamp=datetime.utcnow().isoformat() + "Z",
     )
 
 
@@ -163,20 +164,78 @@ def sync_delta(
     since: str = Query(..., description="ISO 8601 timestamp"),
     db: Session = Depends(get_db),
 ):
+    """Return only plantings that have changed since a given timestamp."""
     try:
         since_dt = datetime.fromisoformat(since.replace("Z", "+00:00")).replace(tzinfo=None)
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid 'since' timestamp.")
-
     delta = crud.get_plantings_since(db, since_dt)
     return schemas.DeltaResponse(
-        delta     = delta,
-        timestamp = datetime.utcnow().isoformat() + "Z",
+        delta=delta,
+        timestamp=datetime.utcnow().isoformat() + "Z",
     )
 
 
+# ===========================================================================
+# DELETE a single action log entry 
+# ===========================================================================
+@router.delete("/plantings/{planting_id}/actions/{action_id}", status_code=204)
+def delete_action_log(
+    planting_id: int,
+    action_id: int,
+    db: Session = Depends(get_db),
+):
+    """Delete a specific action log entry."""
+    # Verify planting exists
+    planting = crud.get_planting(db, planting_id)
+    if planting is None:
+        raise HTTPException(status_code=404, detail=f"Planting {planting_id} not found")
+
+    # Import the ActionLog model directly from models
+    from models import ActionLog
+
+    log = db.query(ActionLog).filter(ActionLog.id == action_id).first()
+    if log is None:
+        raise HTTPException(status_code=404, detail=f"Action log {action_id} not found")
+
+    db.delete(log)
+    db.commit()
+    return None 
+
+# ===========================================================================
+#  PATCH a planting (used for marking harvested / reopen)
+# ===========================================================================
+class PlantingUpdateRequest(BaseModel):
+    status: Optional[str] = None
+    lastAction: Optional[str] = None
+    lastActionDate: Optional[str] = None
+    notes: Optional[str] = None
+
+@router.patch("/plantings/{planting_id}", response_model=schemas.PlantingOut)
+def update_planting(
+    planting_id: int,
+    payload: PlantingUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    """Partially update a planting (e.g., mark as harvested)."""
+    planting = crud.get_planting(db, planting_id)
+    if planting is None:
+        raise HTTPException(status_code=404, detail=f"Planting {planting_id} not found")
+    if payload.status is not None:
+        planting.status = payload.status
+    if payload.lastAction is not None:
+        planting.lastAction = payload.lastAction
+    if payload.lastActionDate is not None:
+        planting.lastActionDate = payload.lastActionDate
+    if payload.notes is not None:
+        planting.notes = payload.notes
+    db.commit()
+    db.refresh(planting)
+    return planting
+
+
 # ---------------------------------------------------------------------------
-# Internal: generate advice specific to this plant's crop, stage and location
+# Internal helper functions (unchanged from original)
 # ---------------------------------------------------------------------------
 
 def _generate_action_advice(
@@ -186,11 +245,7 @@ def _generate_action_advice(
     location: str,
     language: str,
 ) -> tuple[str, str]:
-    """
-    Generate next-step advice specific to THIS crop at THIS stage in THIS location.
-    The prompt is structured so the LLM cannot give generic advice — every key
-    variable (crop, stage, location, action) appears multiple times.
-    """
+    """Generate next-step advice specific to this crop at this stage."""
     question = f"{crop} {stage} stage {location}: after '{action}', what next and when?"
     context, _ = get_context(question)
 
@@ -224,12 +279,11 @@ Answer (3-4 sentences, all specific to {crop} at {stage}):"""
         advice_st = _translate_to_sesotho(advice_en)
     else:
         advice_st = advice_en
-
     return advice_en, advice_st
 
 
 def _fallback_action_advice(action: str, crop: str, stage: str, language: str) -> str:
-    """Stage-aware rule-based fallback specific to crop + stage."""
+    """Stage-aware rule-based fallback advice."""
     action_lower = action.lower()
 
     stage_context_en = {

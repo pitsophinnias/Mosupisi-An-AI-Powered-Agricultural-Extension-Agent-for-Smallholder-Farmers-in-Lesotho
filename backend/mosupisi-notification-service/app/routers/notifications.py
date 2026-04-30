@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime, timedelta
 
 from app.db.database import get_db
 from app.models.notification import Notification, NotificationSettings
@@ -69,6 +70,37 @@ def mark_all_read(
     ).update({"is_read": True})
     db.commit()
     return {"message": "All notifications marked as read"}
+
+
+@router.delete("/clear-all")
+def delete_all_notifications(
+    farmer_id: int = Query(...),
+    type: Optional[str] = Query(None, description="If provided, only delete this type"),
+    db: Session = Depends(get_db),
+):
+    """Delete all notifications for a farmer, optionally filtered by type.
+    Uses /clear-all path to avoid routing conflict with /{notification_id}."""
+    q = db.query(Notification).filter(Notification.farmer_id == farmer_id)
+    if type:
+        q = q.filter(Notification.type == type)
+    deleted = q.delete(synchronize_session=False)
+    db.commit()
+    return {"message": f"Deleted {deleted} notification(s)"}
+
+
+@router.delete("/{notification_id}")
+def delete_notification(
+    notification_id: int,
+    farmer_id: int = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Delete a single notification. Only the owning farmer can delete it."""
+    notif = db.get(Notification, notification_id)
+    if not notif or notif.farmer_id != farmer_id:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    db.delete(notif)
+    db.commit()
+    return {"message": "Notification deleted", "id": notification_id}
 
 
 @router.get("/settings", response_model=NotificationSettingsResponse)

@@ -15,6 +15,7 @@ import {
   DoneAll as DoneAllIcon,
   Settings as SettingsIcon,
   Notifications as EmptyIcon,
+  DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../../context/NotificationContext';
@@ -74,6 +75,7 @@ const NotificationPanel = ({ onClose }) => {
   const {
     notifications, unreadCount, loading,
     markRead, markAllRead, fetchNotifications,
+    deleteNotification,
   } = useNotifications();
 
   const [filter, setFilter] = useState(null); // null = all
@@ -97,6 +99,11 @@ const NotificationPanel = ({ onClose }) => {
     const route = routes[notif.type] || '/';
     onClose();
     navigate(route);
+  };
+
+  const handleDelete = async (e, notifId) => {
+    e.stopPropagation(); // don't trigger navigation
+    await deleteNotification(notifId);
   };
 
   const filterOptions = [
@@ -224,6 +231,17 @@ const NotificationPanel = ({ onClose }) => {
                               </Typography>
                             </>
                           )}
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleDelete(e, notif.id)}
+                            title={isEn ? "Delete" : "Hlakola"}
+                            sx={{
+                              ml: 'auto', p: 0.25, opacity: 0.4,
+                              '&:hover': { opacity: 1, color: 'error.main' },
+                            }}
+                          >
+                            <DeleteIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
                         </Box>
                       </Box>
                     </Box>

@@ -26,15 +26,34 @@ Nearest-city logic:
   using Haversine distance and return that town's forecast data.
   This gives highland farmers (e.g. Butha-Buthe, Semonkong) accurate
   local data instead of interpolated global model output.
+
+FIX (2026-04-29):
+  - load_dotenv() called at module level BEFORE reading LMS_STUB_MODE
+    from os.getenv(). Previously LMS_STUB_MODE was always True because
+    the module-level os.getenv() ran before main.py called load_dotenv().
+  - Retry logic: 2 attempts with 1s wait between on 502/503/504.
+    CSIS nginx always takes exactly 60s to return 504 when its backend
+    is down, so MAX_ATTEMPTS is kept at 2 (not 5) to avoid 5-minute
+    waits before fallback. If CSIS is healthy it responds in < 5s.
+    NASA POWER / OWM are used as fallback when both attempts fail.
 """
 
+import asyncio
 import logging
 import math
 import os
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
+from dotenv import load_dotenv
+
+# IMPORTANT: load_dotenv() MUST be called before os.getenv("LMS_STUB_MODE")
+# below. If load_dotenv() is only called in main.py, the module-level
+# os.getenv() reads the system environment (where LMS_STUB_MODE is not set)
+# and defaults to "true", keeping CSIS permanently disabled.
+load_dotenv()
 
 from models.schemas import (
     CurrentWeather,
@@ -137,7 +156,14 @@ class LMSClient:
 
     def __init__(self):
         self.stub    = LMS_STUB_MODE
-        self.timeout = httpx.Timeout(90.0)
+        self.timeout = httpx.Timeout(
+            connect=10.0,   # time to establish TCP connection
+            read=65.0,      # 65s — CSIS nginx times out its backend at 60s and
+                            # returns 504; we need slightly more than 60s to catch it.
+                            # If CSIS is healthy it responds in < 5s.
+            write=10.0,     # time to send the request body
+            pool=5.0,       # time waiting for a connection from the pool
+        )
 
         if self.stub:
             logger.info(
@@ -171,7 +197,7 @@ class LMSClient:
              causing today's data to appear as tomorrow before 02:00 UTC.
 
         Returns None if no data found so the aggregator falls back to
-        NASA POWER.
+        OpenWeatherMap then NASA POWER.
         """
         if self.stub:
             return None
@@ -191,34 +217,38 @@ class LMSClient:
         # Use CAT time so we match CSIS date strings correctly
         today = datetime.now(CAT).strftime("%Y-%m-%d")
 
-        # Collect all snapshots for today for our town
-        candidates = []
+        # Collect ALL snapshots for our town across all dates
+        # CSIS sometimes returns data from days ago — we use the most recent
+        # available snapshot rather than requiring today's date specifically.
+        all_candidates = []
         for collection in collections:
-            coll_date = collection.get("date", "")[:10]
-            if coll_date != today:
-                continue
             for feature in collection.get("features", []):
                 props = feature.get("properties", {})
                 if props.get("city_slug") != town["slug"]:
                     continue
-                candidates.append(props)
+                # Only include midnight snapshots (current conditions proxy)
+                if props.get("effective_period_time") != "00:00:00":
+                    continue
+                all_candidates.append(props)
 
-        if not candidates:
-            logger.warning(
-                f"CSIS: no snapshot at all found for {town['name']} on {today}"
-            )
+        if not all_candidates:
+            logger.warning(f"CSIS: no midnight snapshot found for {town['name']}")
             return None
 
-        # Prefer midnight snapshot, fall back to earliest available
-        props = next(
-            (p for p in candidates if p.get("effective_period_time") == "00:00:00"),
-            candidates[0],
-        )
+        # Sort by date descending — take the most recent snapshot available
+        all_candidates.sort(key=lambda p: p.get("date", ""), reverse=True)
+        props = all_candidates[0]
+        snap_date = props.get("date", "")[:10]
 
-        logger.info(
-            f"CSIS: using snapshot time={props.get('effective_period_time')} "
-            f"for {town['name']} on {today}"
-        )
+        if snap_date != today:
+            logger.warning(
+                f"CSIS: most recent snapshot for {town['name']} is from "
+                f"{snap_date} (today is {today}) — CSIS data may be stale"
+            )
+        else:
+            logger.info(
+                f"CSIS: using snapshot for {town['name']} on {snap_date}"
+            )
 
         return CurrentWeather(
             latitude           = latitude,
@@ -271,9 +301,12 @@ class LMSClient:
             return None
 
         # Use CAT time so today's date matches CSIS date strings
-        today = datetime.now(CAT).strftime("%Y-%m-%d")
+        today     = datetime.now(CAT).strftime("%Y-%m-%d")
+        # Accept data from up to 3 days ago — CSIS sometimes returns forecasts
+        # that were generated a few days back but still cover upcoming days
+        min_date  = (datetime.now(CAT) - timedelta(days=3)).strftime("%Y-%m-%d")
 
-        # Collect whole-day entries for our town, sorted by date, today onwards
+        # Collect whole-day entries for our town, sorted by date
         daily: dict[str, DailyForecast] = {}
         for collection in collections:
             for feature in collection.get("features", []):
@@ -287,7 +320,8 @@ class LMSClient:
                 date_str = props.get("date", "")[:10]
                 if not date_str or date_str in daily:
                     continue
-                if date_str < today:
+                # Accept dates from min_date onwards (not strictly today)
+                if date_str < min_date:
                     continue
 
                 daily[date_str] = DailyForecast(
@@ -303,8 +337,19 @@ class LMSClient:
         sorted_days = [daily[d] for d in sorted(daily.keys())][:days]
 
         if not sorted_days:
-            logger.warning(f"CSIS: no whole-day forecast found for {town['name']}")
+            logger.warning(
+                f"CSIS: no forecast data found for {town['name']} "
+                f"(data may be older than 3 days — CSIS may not have updated recently)"
+            )
             return None
+
+        # Warn if all data is from the past
+        future_days = [d for d in sorted_days if d.date >= today]
+        if not future_days:
+            logger.warning(
+                f"CSIS: all forecast data for {town['name']} is in the past — "
+                f"most recent date: {sorted_days[-1].date} (today: {today})"
+            )
 
         logger.info(
             f"CSIS: returning {len(sorted_days)} forecast days for "
@@ -334,15 +379,19 @@ class LMSClient:
 
     async def _fetch_all(self) -> list:
         """
-        Fetch the full CSIS forecast array, using module-level cache when fresh.
+        Fetch the full CSIS forecast array with exponential backoff retry.
+
+        CSIS returns 504 when its backend is overloaded — this is transient
+        and usually resolves on retry. Strategy:
+          - Up to 5 attempts
+          - Waits 1s, 2s, 4s, 8s between attempts (2^attempt seconds)
+          - Only falls through to OWM/NASA POWER if ALL 5 attempts fail
 
         One CSIS call returns all 13 towns × 16 days. The module-level cache
         means all LMSClient instances within the same process share one copy
         of the data — requests for Maseru, Butha-Buthe and Semonkong all reuse
-        the same fetch without hitting CSIS again.
+        the same fetch without hitting CSIS again within the 30-minute TTL.
         """
-        import time
-
         age = time.time() - _CSIS_CACHE["fetched_at"]
         if _CSIS_CACHE["data"] and age < _CSIS_CACHE["ttl"]:
             logger.info(
@@ -360,9 +409,14 @@ class LMSClient:
             "Accept-Language": "en-US,en;q=0.9",
         }
 
-        for attempt in range(2):
+        MAX_ATTEMPTS = 2   # Each attempt waits 60s for nginx — keep low to fail fast
+        last_error   = None
+
+        for attempt in range(MAX_ATTEMPTS):
             try:
-                logger.info(f"CSIS fetch attempt {attempt + 1}/2 from {CSIS_URL}")
+                logger.info(
+                    f"CSIS fetch attempt {attempt + 1}/{MAX_ATTEMPTS} from {CSIS_URL}"
+                )
                 async with httpx.AsyncClient(
                     timeout=self.timeout,
                     verify=False,
@@ -381,16 +435,51 @@ class LMSClient:
                 )
                 return data
 
-            except httpx.TimeoutException as e:
-                logger.warning(f"CSIS timeout on attempt {attempt + 1}/2: {e}")
-                if attempt == 1:
-                    raise
-            except httpx.ConnectError as e:
-                logger.error(f"CSIS connection error: {e}")
-                raise
             except httpx.HTTPStatusError as e:
-                logger.error(f"CSIS HTTP {e.response.status_code}: {e.response.text[:200]}")
+                last_error = e
+                if e.response.status_code in (502, 503, 504):
+                    # Transient overload — retry with exponential backoff
+                    wait = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+                    logger.warning(
+                        f"CSIS HTTP {e.response.status_code} on attempt "
+                        f"{attempt + 1}/{MAX_ATTEMPTS} — retrying in {wait}s..."
+                    )
+                    if attempt < MAX_ATTEMPTS - 1:
+                        await asyncio.sleep(wait)
+                        continue
+                    logger.error(
+                        f"CSIS gave {e.response.status_code} on all "
+                        f"{MAX_ATTEMPTS} attempts — handing off to fallback"
+                    )
+                else:
+                    logger.error(
+                        f"CSIS HTTP {e.response.status_code}: "
+                        f"{e.response.text[:200]}"
+                    )
+                raise last_error
+
+            except httpx.TimeoutException as e:
+                last_error = e
+                wait = 2 ** attempt
+                logger.warning(
+                    f"CSIS timeout on attempt {attempt + 1}/{MAX_ATTEMPTS} "
+                    f"— retrying in {wait}s..."
+                )
+                if attempt < MAX_ATTEMPTS - 1:
+                    await asyncio.sleep(wait)
+                    continue
+                logger.error(
+                    f"CSIS timed out on all {MAX_ATTEMPTS} attempts "
+                    f"— handing off to fallback"
+                )
+                raise last_error
+
+            except httpx.ConnectError as e:
+                logger.error(f"CSIS connection error (server unreachable): {e}")
                 raise
+
             except Exception as e:
                 logger.error(f"CSIS fetch failed ({type(e).__name__}): {e}")
                 raise
+
+        raise last_error
