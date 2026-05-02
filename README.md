@@ -96,7 +96,7 @@ All services must be **started in the correct order** (LLM first, then the rest)
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/mosupisi.git
+git clone https://github.com/pitsophinnias/Mosupisi-An-AI-Powered-Agricultural-Extension-Agent-for-Smallholder-Farmers-in-Lesotho
 cd mosupisi
 ```
 
