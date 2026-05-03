@@ -1,9 +1,6 @@
 New-Item .gitignore -ItemType File
 notepad .gitignore
 ```
-
-Paste this into Notepad and save:
-```
 # Python
 __pycache__/
 *.pyc
@@ -38,3 +35,5 @@ Thumbs.db
 
 # Logs
 *.log
+
+desktop.ini
