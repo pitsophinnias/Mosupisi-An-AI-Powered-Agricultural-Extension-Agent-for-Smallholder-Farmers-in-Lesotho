@@ -365,7 +365,7 @@ You can use `curl` or open the URLs in a browser. A successful response returns 
 ## Using the Platform
 
 1. Open your browser at **`http://localhost:3000`**
-2. **Register** as a farmer or extension officer (phone number, name, district, language).
+2. **Register** as a farmer (phone number, name, district, language).
 3. **Log in** with your credentials.
 4. **Planting Guide** - add crops (maize, sorghum, legumes), record planting dates, log activities (watering, fertilising, weeding) and receive stage-specific AI advice with weather outlook.
 5. **Pest Control** - browse the pest library, report sightings, get treatment advice, and log control actions.
