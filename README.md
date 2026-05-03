@@ -13,6 +13,7 @@
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
+- [Model Training](#model-training)
 - [Services & Ports](#services--ports)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
@@ -56,6 +57,20 @@ Key design decisions:
 - **SQLite + IndexedDB** - each service has its own database; frontend caches weather and planting data.
 - **Delta sync** - planting records sync incrementally after reconnection.
 - **SMS fallback** - critical alerts sent via Africa's Talking (sandbox mode by default).
+
+---
+
+## Model Training
+
+The `mosupisi-q4.gguf` model was trained on **Google Colab** using a free-tier T4 GPU. The training pipeline starts from a base small language model, fine-tunes it on the Lesotho agrometeorological corpus assembled from official Lesotho Meteorological Services bulletins (2010–2026), and quantises the resulting weights to 4-bit GGUF format for local CPU inference.
+
+| Resource | Link |
+|----------|------|
+| 📓 Training notebook (Google Colab) | [Open in Colab](https://colab.research.google.com/drive/18R8WNRp6DTTmS_Y26-Bi3369Hcgw-Bd2?usp=drive_link) |
+| 📁 Fine-tuned model files (Google Drive) | [Open folder](https://drive.google.com/drive/folders/13P4vdbN26J_i3ktFgRVxMa3k7Rpl1DOj?usp=drive_link) |
+
+> [!NOTE]
+> The Google Drive folder contains the fine-tuned adapter weights and the final quantised `mosupisi-q4.gguf` file. Download `mosupisi-q4.gguf` and place it as described in [Model Placement](#3-model-placement-critical) before starting the platform.
 
 ---
 
