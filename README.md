@@ -194,8 +194,7 @@ Other services (weather, chat Python) require only `LLM_SERVICE_URL` in their `.
 The LLM service looks for `mosupisi-q4.gguf` in the following order:
 
 1. `backend/mosupisi-planting-guide-service/models/mosupisi-q4.gguf`
-2. `backend/mosupisi-pest-control-service/models/mosupisi-q4.gguf`
-3. The path set by `LLAMA_MODEL_PATH` in `.env.example`
+2. The path set by `LLAMA_MODEL_PATH` in `.env.example`
 
 > **Place the model file** in the planting guide service `models` folder (preferred).  
 > If the file is missing, the LLM service will raise a `FileNotFoundError` with the searched paths.
